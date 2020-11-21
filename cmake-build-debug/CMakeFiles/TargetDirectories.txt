@@ -1,0 +1,3 @@
+/home/pavel/Desktop/IZP_projekt_2/cmake-build-debug/CMakeFiles/rebuild_cache.dir
+/home/pavel/Desktop/IZP_projekt_2/cmake-build-debug/CMakeFiles/edit_cache.dir
+/home/pavel/Desktop/IZP_projekt_2/cmake-build-debug/CMakeFiles/IZP_projekt_2.dir
