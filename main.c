@@ -176,7 +176,11 @@ Table *load_table_from_file(char *delim, char *delim_string, bool multi_characte
                     tabulka->zoznam_riadkov[aktualny_pocet_riadkov - 1].pocet_buniek++;
 
 
-                    tabulka->zoznam_riadkov[aktualny_pocet_riadkov-1].zoznam_buniek[aktualny_pocet_buniek - 1].obsah = malloc(sizeof(int));
+                    int *novy_obsah;
+                    novy_obsah = malloc(sizeof(int));
+                    if (novy_obsah == NULL) return NULL;
+
+                    tabulka->zoznam_riadkov[aktualny_pocet_riadkov-1].zoznam_buniek[aktualny_pocet_buniek - 1].obsah = novy_obsah;
                     tabulka->zoznam_riadkov[aktualny_pocet_riadkov-1].zoznam_buniek[aktualny_pocet_buniek - 1].dlzka_obsahu = 1;
 
                     // vytvorenie prazdnej bunky na konci riadku
@@ -259,8 +263,6 @@ Table *load_table_from_file(char *delim, char *delim_string, bool multi_characte
         }
     }
 
-
-
     return tabulka;
 }
 
@@ -269,10 +271,10 @@ void print_table (Table *tabulka, char delim) {
     for (int riadok = 0; riadok < tabulka->pocet_riadkov; riadok++) {
         for (int bunka = 0; bunka < tabulka->zoznam_riadkov[riadok].pocet_buniek; bunka++) {
             for (int znak = 0; znak < tabulka->zoznam_riadkov[riadok].zoznam_buniek[bunka].dlzka_obsahu;znak++) {
-                printf("%c\n", tabulka->zoznam_riadkov[riadok].zoznam_buniek[bunka].obsah[znak]);
+                printf("%c", tabulka->zoznam_riadkov[riadok].zoznam_buniek[bunka].obsah[znak]);
             }
             if (bunka+1 < tabulka->zoznam_riadkov[riadok].pocet_buniek) {
-                printf("%c\n", delim);
+                printf("%c", delim);
             }
 
         }
