@@ -11,6 +11,29 @@
 //#define INIT_ROW_COUNT 1
 //#define END_OF_LINE '\0'
 
+typedef enum {IROW, AROW, DROW, ICOL, ACOL, DCOL} Commands;
+
+// struct premennej, vie v sebe ulozit cislo alebo string
+typedef struct premenna {
+    int typ_premennej; // -1 = neurcena, 0=cislo, 1 = float, 2 = string
+    int cislo;
+    double cislo_f;
+    char *string;
+} Variable;
+
+typedef struct prikaz {
+    int selection[4];
+
+    bool max;
+    bool min;
+    bool find;
+    char *find_str;
+} Arg;
+
+typedef struct prikazy {
+    int pocet;
+} Arguments;
+
 typedef struct bunka {
     int dlzka_obsahu;
     int *obsah;
@@ -27,18 +50,17 @@ typedef struct tabulka {
 } Table;
 
 
-
 typedef enum {SCAN_DELIM, AWAIT_DELIM, DONE} DelimMode;
 typedef enum {SCAN_DELIM_AND_ARGS, EXIT}RunMode;//, RUN, ALL_DONE, RANGE_ERROR, EMPTY_FILE} RunMode;
-//void process_args (int argc, char **argv, const bool *found_delim, int *param1, int *param2, char *string_param, ArgsMode *args_mode, ParamMode *param_mode);
-
 int is_delim (const char *delim, char *delim_string[], const bool *multi_character_delim, int znak);
-//void find_delim(int argc, char **argv, char *delim, bool *found_delim, char delim_string[]);
 char * save_delim_and_args(int argc, char **argv, char *delim, char delim_string[], RunMode *run_mode, bool *multi_character_delim);
 Table * load_table_from_file(char *delim, char *delim_string, bool multi_character_delim);
 void print_table (Table *tabulka, char delim);
 void dealloc_table (Table *tabulka);
 void level_table(Table *tabulka);
+void dealloc_variables(Variable *list);
+Variable *init_list_of_variables();
+
 
 
 
@@ -63,20 +85,44 @@ int main(int argc, char *argv[]) {
 
     // hlavny stavovy automat
     RunMode run_mode = SCAN_DELIM_AND_ARGS;
+
+    // string vsetkych parametrov z inputu
     char *string_of_all_params;
+
+    // vytvorenie pointra na tabulku
     Table *tabulka;
+
+    // vytvorenie listu pre premenne def _X
+    Variable *list_of_variables;
+    list_of_variables = init_list_of_variables();
+
+
+
 
     while (run_mode != EXIT) {
         switch (run_mode) {
             case SCAN_DELIM_AND_ARGS:
 
+                // ulozenie delimov a string_of_all_params
                 string_of_all_params = save_delim_and_args(argc, argv, &delim, delim_string, &run_mode, &multi_character_delim);
 
+                // nacitanie tabulky do trojrozmerneho structov
                 tabulka = load_table_from_file(&delim, delim_string, multi_character_delim);
+
+                // dorovnanie tabulky aby bol vsade rovnaky pocet stlpcov
+                level_table(tabulka);
+
+                // basic vytlacenie tabulky
                 print_table(tabulka, delim);
 
+                //save_args(argv);
+
+
+
+
+
+
                 run_mode = EXIT;
-                free (string_of_all_params);
                 break;
 
             case EXIT :
@@ -85,7 +131,18 @@ int main(int argc, char *argv[]) {
     }
 
     // DEALLOC
+
+    // string input stringu s argumentmi
+    free (string_of_all_params);
+
+    // dealokacia celej tabulky
     dealloc_table(tabulka);
+
+    // dealokacia structu na vsetky premenne
+    //free(all_args);
+
+    // dealokacia listu premennych
+    dealloc_variables(list_of_variables);
 
     return 0;
 }
@@ -361,11 +418,58 @@ int is_delim (const char *delim, char *delim_string[], const bool *multi_charact
 }
 
 void level_table(Table *tabulka) {
-    // najde maximalny pocet stlpcov v celej tabulke
+    // najde maximalny pocet stlpcov v celej tabulke a dorovna tabulku na tento pocet v kazdom riadku
+
     int max_pocet_stlpcov = 1;
+
     for (int riadok = 0; riadok < tabulka->pocet_riadkov; riadok++) {
-        if (tabu) {
+
+        if (tabulka->zoznam_riadkov[riadok].pocet_buniek > max_pocet_stlpcov) {
+            max_pocet_stlpcov = tabulka->zoznam_riadkov[riadok].pocet_buniek;
+        }
+    }
+
+    for (int riadok = 0; riadok < tabulka->pocet_riadkov; riadok++) {
+        if (tabulka->zoznam_riadkov[riadok].pocet_buniek != max_pocet_stlpcov) {
+
+            int pocet_buniek_v_stlpci = tabulka->zoznam_riadkov[riadok].pocet_buniek;
+
+            for (int aktualny_pocet_buniek = pocet_buniek_v_stlpci + 1; aktualny_pocet_buniek <= max_pocet_stlpcov; aktualny_pocet_buniek++) {
+
+                Cell *newcell = realloc(tabulka->zoznam_riadkov[riadok].zoznam_buniek, sizeof(Cell) * aktualny_pocet_buniek);
+
+                // priradenie nenuloveho pointra
+                tabulka->zoznam_riadkov[riadok].zoznam_buniek = newcell;
+
+                // alokacia pamate na obsahu bunky
+                tabulka->zoznam_riadkov[riadok].zoznam_buniek[aktualny_pocet_buniek - 1].obsah = malloc(sizeof(int));
+
+                // resetovanie dlzky obsahu bunky
+                tabulka->zoznam_riadkov[riadok].zoznam_buniek[aktualny_pocet_buniek - 1].dlzka_obsahu = 1;
+
+                tabulka->zoznam_riadkov[riadok].pocet_buniek = aktualny_pocet_buniek;
+            }
 
         }
+    }
+}
+
+Variable *init_list_of_variables(){
+    Variable *list;
+    list = malloc(sizeof(Variable) * 10);
+
+    for (int i = 0; i < 10; i++) {
+        list[i].typ_premennej = -1;
+        list[i].cislo = 0;
+        list[i].cislo_f = 0.0;
+        list[i].string = malloc(sizeof(char));
+    }
+
+    return list;
+}
+
+void dealloc_variables(Variable *list) {
+    for (int i = 0; i < 10; i++) {
+        free(list[i].string);
     }
 }
