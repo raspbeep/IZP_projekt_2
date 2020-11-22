@@ -18,12 +18,12 @@ typedef struct bunka {
 
 typedef struct riadok {
     int pocet_buniek;
-    Cell *zoznam_buniek;
+    Cell **zoznam_buniek;
 } Row;
 
 typedef struct tabulka {
     int pocet_riadkov;
-    Row *zoznam_riadkov;
+    Row **zoznam_riadkov;
 } Table;
 
 typedef enum {SCAN_DELIM, AWAIT_DELIM, DONE} DelimMode;
@@ -39,7 +39,7 @@ void dealloc_table (Table *tabulka);
 
 
 
-        int main(int argc, char *argv[]) {
+int main(int argc, char *argv[]) {
 
     // neboli zadane ziadne argumenty
     if (argc == 1) return 2;
@@ -73,8 +73,7 @@ void dealloc_table (Table *tabulka);
 
                 string_of_all_params = save_delim_and_args(argc, argv, &delim, delim_string, &run_mode, &multi_character_delim);
                 tabulka = load_table_from_file(&delim, delim_string, multi_character_delim);
-                print_table(tabulka, delim);
-                free(tabulka);
+                //print_table(tabulka, delim);
 
                 run_mode = EXIT;
                 free (string_of_all_params);
@@ -88,7 +87,7 @@ void dealloc_table (Table *tabulka);
 
     // DEALLOC
     dealloc_table(tabulka);
-    //free(&tabulka);
+    free(tabulka);
 
     return 0;
 
@@ -105,19 +104,22 @@ Table *load_table_from_file(char *delim, char *delim_string, bool multi_characte
     int dlzka_obsahu = 1;
 
     // alokacia pamate na data bunky
-    int *obsah = malloc(sizeof(char) * dlzka_obsahu);
+    int *obsah;
+    obsah = malloc(sizeof(int) * dlzka_obsahu);
 
     // pocet buniek ktore som uz presiel v aktualnom riadku
     int aktualny_pocet_buniek = 1;
 
     // alokacia pamate na array buniek v aktualnom riadku
-    Cell *aktualny_zoznam_buniek = malloc(sizeof(Cell) * aktualny_pocet_buniek);
+    Cell **aktualny_zoznam_buniek;
+    aktualny_zoznam_buniek = malloc(sizeof(Cell*) * aktualny_pocet_buniek);
 
     // pocet buniek ktore som uz presiel v aktualnom riadku
     int aktualny_pocet_riadkov = 1;
 
     // alokacia pamate na array buniek v aktualnom riadku
-    Row *aktualny_zoznam_riadkov = malloc(sizeof(Cell) * aktualny_pocet_riadkov);
+    Row **aktualny_zoznam_riadkov;
+    aktualny_zoznam_riadkov = malloc(sizeof(Row*) * aktualny_pocet_riadkov);
 
     //nacitanie prveho znaku
     znak = fgetc(stdin);
@@ -135,13 +137,14 @@ Table *load_table_from_file(char *delim, char *delim_string, bool multi_characte
             znak = fgetc(stdin);
 
             // vytvorenie structu bunky ktoru som prave dokoncil
-            Cell bunka = {dlzka_obsahu, obsah};
-
+            Cell *bunka;
+            bunka = malloc(sizeof(Cell));
+            if (bunka == NULL) return NULL;
+            bunka->dlzka_obsahu = dlzka_obsahu;
+            bunka->obsah = obsah;
 
             // pridanie na koniec zoznamu buniek v aktualnom riadku
-            *(aktualny_zoznam_buniek + aktualny_pocet_buniek - 1) = bunka;
-
-
+            aktualny_zoznam_buniek[aktualny_pocet_buniek - 1] = bunka;
 
             // ak nie je dalsi znak EOF tak si chcem zvacsit miesto na dalsie bunky
 
@@ -151,7 +154,9 @@ Table *load_table_from_file(char *delim, char *delim_string, bool multi_characte
                 aktualny_pocet_buniek++;
 
                 // zvacsenie zoznamu aktualnych buniek
-                aktualny_zoznam_buniek = realloc(aktualny_zoznam_buniek, sizeof(Cell) * aktualny_pocet_buniek);
+                Cell **newptr = realloc(aktualny_zoznam_buniek, sizeof(Cell*) * aktualny_pocet_buniek);
+                if (newptr == NULL) return NULL;
+                aktualny_zoznam_buniek = newptr;
 
                 //ak je znak doublequote tak sa zapne mod in_quotes a preskoci ich
                 if (znak == 34) {
@@ -159,27 +164,26 @@ Table *load_table_from_file(char *delim, char *delim_string, bool multi_characte
                     znak = fgetc(stdin);
                 }
                 dlzka_obsahu = 1;
-                obsah = malloc(sizeof(char));
+                obsah = malloc(sizeof(int));
 
             } else {
                 if (znak == '\n' ) {
+
                     // inkrementacia poctu buniek v aktualnom riadku
                     aktualny_pocet_buniek++;
+
                     // vytvorenie prazdnej bunky na konci riadku
                     dlzka_obsahu = 1;
 
-                    // vytvorenie pointra na koniec riadku
-                    // kvoli homogennosti vsetkych prazdnych buniek
-                    obsah = malloc(sizeof(char)*1);
-                    *obsah = 4;
-
+                    // vytvorenie prazdneho obsahu pre bunku lebo som na delime a dalsi je koniec riadku
+                    obsah = malloc(sizeof(int));
 
                 }
             }
 
-
         // iny znak ako delim
         } else if (znak != '\n'){
+
             // ak je znak backslash tak ho preskoci
             if (znak == 92) {
                 znak = fgetc(stdin);
@@ -190,6 +194,8 @@ Table *load_table_from_file(char *delim, char *delim_string, bool multi_characte
                 znak = fgetc(stdin);
                 dlzka_obsahu--;
             } else {
+
+                //znak sa prida do obsahu
                 *(obsah + dlzka_obsahu - 1) = znak;
 
                 // nacitanie dalsieho znaku
@@ -198,7 +204,9 @@ Table *load_table_from_file(char *delim, char *delim_string, bool multi_characte
                 // ak nie je dalsi znak EOF tak vytvorim nove miesto na dalsi znak
                 if (znak != EOF && znak != '\n' && !is_delim(delim, &delim_string, &multi_character_delim, znak)) {
                     dlzka_obsahu++;
-                    obsah = realloc(obsah, sizeof(char) * dlzka_obsahu);
+                    int *new_obsah = realloc(obsah, sizeof(int) * dlzka_obsahu);
+                    if (new_obsah == NULL) return NULL;
+                    obsah = new_obsah;
                 }
 
             }
@@ -210,22 +218,28 @@ Table *load_table_from_file(char *delim, char *delim_string, bool multi_characte
             znak = fgetc(stdin);
 
             // vytvorenie structu na aktualnu bunku
-            Cell bunka = {dlzka_obsahu, obsah};
+            Cell *bunka;
+            bunka = malloc(sizeof(Cell));
+            if (bunka == NULL) return NULL;
+            bunka->dlzka_obsahu = dlzka_obsahu;
+            bunka->obsah = obsah;
 
             // pridanie bunky do aktualneho zoznamu, -1 lebo na poslednom mieste je \0
-            *(aktualny_zoznam_buniek + aktualny_pocet_buniek - 1) = bunka;
+            aktualny_zoznam_buniek[aktualny_pocet_buniek - 1] = bunka;
 
             // alokacia pamate na konkretny riadok
-            Row *riadok = malloc(sizeof(Row));
+
+            Row *riadok;
+            riadok = malloc(sizeof(Row));
+            if (riadok == NULL) return NULL;
 
 
             // priradenie informacii o aktualne dokoncenej bunke do structu riadok
             riadok->pocet_buniek = aktualny_pocet_buniek;
             riadok->zoznam_buniek = aktualny_zoznam_buniek;
-            free((riadok->zoznam_buniek+2)->obsah);
 
             // pridanie do aktualneho zoznamu riadkov, -1 kvoli indexu
-            *(aktualny_zoznam_riadkov + aktualny_pocet_riadkov - 1) = *riadok;
+            aktualny_zoznam_riadkov[aktualny_pocet_riadkov - 1] = riadok;
 
             if (znak != EOF) {
 
@@ -233,16 +247,19 @@ Table *load_table_from_file(char *delim, char *delim_string, bool multi_characte
                 aktualny_pocet_riadkov++;
 
                 // zvacsenie aktualneho zoznamu riadkov
-                aktualny_zoznam_riadkov = realloc(aktualny_zoznam_riadkov, sizeof(Row) * aktualny_pocet_riadkov);
+                Row **newptr = realloc(aktualny_zoznam_riadkov, sizeof(Row*) * aktualny_pocet_riadkov);
+                if (newptr) {
+                    aktualny_zoznam_riadkov = newptr;
+                }
 
                 // vynulovanie aktualneho poctu buniek
                 aktualny_pocet_buniek = 1;
 
-                aktualny_zoznam_buniek = malloc(sizeof(Cell) * aktualny_pocet_buniek);
+                aktualny_zoznam_buniek = malloc(sizeof(Cell*) * aktualny_pocet_buniek);
 
                 dlzka_obsahu = 1;
 
-                obsah = malloc(sizeof(char) * dlzka_obsahu);
+                obsah = malloc(sizeof(int));
             }
         }
     }
@@ -250,16 +267,19 @@ Table *load_table_from_file(char *delim, char *delim_string, bool multi_characte
     // narazil som na EOF, ulozim poslednu bunku
 
     // vytvorenie structu na aktualnu bunku
-    Cell bunka = {dlzka_obsahu, obsah};
+    Cell *bunka = malloc(sizeof(Cell));
+    bunka->dlzka_obsahu = dlzka_obsahu;
+    bunka->obsah = obsah;
+
 
     // inkrementacia poctu buniek
     //aktualny_pocet_buniek++;
 
     // zvacsenie zoznamu buniek
-    aktualny_zoznam_buniek = realloc(aktualny_zoznam_buniek, sizeof(Cell) * aktualny_pocet_buniek);
+    aktualny_zoznam_buniek = realloc(aktualny_zoznam_buniek, sizeof(Cell*) * aktualny_pocet_buniek);
 
     // pridanie bunky do aktualneho zoznamu, -1 lebo na poslednom mieste je \0
-    *(aktualny_zoznam_buniek + aktualny_pocet_buniek - 1) = bunka;
+    aktualny_zoznam_buniek[aktualny_pocet_buniek - 1] = bunka;
 
     // inkrementacia aktualneho poctu riadkov
     //aktualny_pocet_riadkov++;
@@ -271,17 +291,15 @@ Table *load_table_from_file(char *delim, char *delim_string, bool multi_characte
     riadok->zoznam_buniek = aktualny_zoznam_buniek;
 
     // zvacsenie aktualneho zoznamu riadkov
-    aktualny_zoznam_riadkov = realloc(aktualny_zoznam_riadkov, sizeof(Row) * aktualny_pocet_riadkov);
+    aktualny_zoznam_riadkov = realloc(aktualny_zoznam_riadkov, sizeof(Row*) * aktualny_pocet_riadkov);
 
     // pridanie do aktualneho zoznamu riadkov, -1 lebo na poslednom mieste je \0
-    *(aktualny_zoznam_riadkov + aktualny_pocet_riadkov - 1) = *riadok;
-
+    aktualny_zoznam_riadkov[aktualny_pocet_riadkov - 1] = riadok;
 
     Table *tabulka = malloc(sizeof(Table));
 
     tabulka->pocet_riadkov = aktualny_pocet_riadkov;
     tabulka->zoznam_riadkov = aktualny_zoznam_riadkov;
-
 
     return tabulka;
 }
@@ -289,11 +307,14 @@ Table *load_table_from_file(char *delim, char *delim_string, bool multi_characte
 void print_table (Table *tabulka, char delim) {
 
     for (int riadok = 0; riadok < tabulka->pocet_riadkov; riadok++) {
-        for (int bunka = 0; bunka < tabulka->zoznam_riadkov[riadok].pocet_buniek; bunka ++) {
-            for (int znak = 0; znak < tabulka->zoznam_riadkov[riadok].zoznam_buniek[bunka].dlzka_obsahu; znak++) {
-                printf ("%c", tabulka->zoznam_riadkov[riadok].zoznam_buniek[bunka].obsah[znak]);
+        for (int bunka = 0; bunka < tabulka->zoznam_riadkov[riadok]->pocet_buniek; bunka++) {
+            for (int znak = 0; znak < tabulka->zoznam_riadkov[riadok]->zoznam_buniek[bunka]->dlzka_obsahu;znak++) {
+                printf("%c", tabulka->zoznam_riadkov[riadok]->zoznam_buniek[bunka]->obsah[znak]);                
             }
-            if(bunka + 1 < tabulka->zoznam_riadkov[riadok].pocet_buniek) printf("%c", delim);
+            if (bunka+1 < tabulka->zoznam_riadkov[riadok]->pocet_buniek) {
+                printf("%c", delim);
+            }
+
         }
         printf("\n");
     }
@@ -302,13 +323,13 @@ void print_table (Table *tabulka, char delim) {
 void dealloc_table (Table *tabulka) {
 
     for (int riadok = 0; riadok < tabulka->pocet_riadkov; riadok++) {
-        for (int bunka = 0; bunka < tabulka->zoznam_riadkov[riadok].pocet_buniek; bunka ++) {
-            free(tabulka->zoznam_riadkov[riadok].zoznam_buniek[bunka].obsah);
+        for (int bunka = 0; bunka < tabulka->zoznam_riadkov[riadok]->pocet_buniek; bunka ++) {
+            free(tabulka->zoznam_riadkov[riadok]->zoznam_buniek[bunka]->obsah);
         }
         //free(tabulka.zoznam_riadkov[riadok].zoznam_buniek);
     }
     free(tabulka->zoznam_riadkov);
-    free(tabulka);
+    //free(tabulka);
 }
 
 char * save_delim_and_args(int argc, char **argv, char *delim, char delim_string[MAX_CELL_SIZE], RunMode *run_mode, bool *multi_character_delim) {
