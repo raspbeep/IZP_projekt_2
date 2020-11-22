@@ -86,7 +86,6 @@ int main(int argc, char *argv[]) {
 
     // DEALLOC
     dealloc_table(tabulka);
-    //free(tabulka);
 
     return 0;
 }
@@ -97,23 +96,20 @@ Table *load_table_from_file(char *delim, char *delim_string, bool multi_characte
 
     //Cell bunka = {1, obsah};
     int znak;
+
+    // alokacia pamate pre struct bunka
     Table *tabulka;
-
     tabulka = malloc(sizeof(Table));
-
 
     // dlzka aktualnej bunky
     int dlzka_obsahu = 1;
 
-
-
-    tabulka->zoznam_riadkov = NULL;
+    // prvotna inicializacia structov
+    //vytvori sa zoznam riadkov, prvy riadok, zoznam buniek, bunka a obsah
     tabulka->pocet_riadkov = 1;
     tabulka->zoznam_riadkov = malloc(sizeof(Row) * 1);
     tabulka->zoznam_riadkov->zoznam_buniek = malloc(sizeof(Cell) * 1);
     tabulka->zoznam_riadkov->pocet_buniek = 1;
-
-
     tabulka->zoznam_riadkov->zoznam_buniek->dlzka_obsahu = dlzka_obsahu;
     tabulka->zoznam_riadkov->zoznam_buniek->obsah = malloc(sizeof(int));
 
@@ -123,11 +119,11 @@ Table *load_table_from_file(char *delim, char *delim_string, bool multi_characte
     // pocet buniek ktore som uz presiel v aktualnom riadku
     int aktualny_pocet_buniek = 1;
 
-
+    // nacitanie prveho znaku
     znak = fgetc(stdin);
 
+    // premenna na quotes mode
     bool in_quotes = false;
-
 
     // kym neskapem
     while (znak != EOF) {
@@ -138,7 +134,6 @@ Table *load_table_from_file(char *delim, char *delim_string, bool multi_characte
             // nacitanie noveho znaku
             znak = fgetc(stdin);
 
-
             // ak nie je dalsi znak EOF tak si chcem zvacsit miesto na dalsie bunky
             if (znak != '\n' && znak != EOF) {
 
@@ -147,13 +142,21 @@ Table *load_table_from_file(char *delim, char *delim_string, bool multi_characte
 
                 // zvacsenie zoznamu aktualnych buniek
                 Cell *newptr = realloc(tabulka->zoznam_riadkov[aktualny_pocet_riadkov-1].zoznam_buniek, sizeof(Cell) * aktualny_pocet_buniek);
+
+                // overenie pointra
                 if (newptr == NULL) return NULL;
+
+                // priradenie nenuloveho pointra
                 tabulka->zoznam_riadkov[aktualny_pocet_riadkov-1].zoznam_buniek = newptr;
 
+                // intrementracia poctu buniek v aktualnom riadku
                 tabulka->zoznam_riadkov[aktualny_pocet_riadkov - 1].pocet_buniek++;
-                tabulka->zoznam_riadkov[aktualny_pocet_riadkov-1].zoznam_buniek[aktualny_pocet_buniek - 1].obsah = malloc(sizeof(int));
-                tabulka->zoznam_riadkov[aktualny_pocet_riadkov-1].zoznam_buniek[aktualny_pocet_buniek - 1].dlzka_obsahu = 1;
 
+                // alokacia novej pamate na obsah bunky
+                tabulka->zoznam_riadkov[aktualny_pocet_riadkov-1].zoznam_buniek[aktualny_pocet_buniek - 1].obsah = malloc(sizeof(int));
+
+                //resetovanie dlzky obsahu novej bunky
+                tabulka->zoznam_riadkov[aktualny_pocet_riadkov-1].zoznam_buniek[aktualny_pocet_buniek - 1].dlzka_obsahu = 1;
 
                 //ak je znak doublequote tak sa zapne mod in_quotes a preskoci ich
                 if (znak == 34) {
@@ -162,19 +165,16 @@ Table *load_table_from_file(char *delim, char *delim_string, bool multi_characte
                 }
                 dlzka_obsahu = 1;
 
-
             } else {
                 if (znak == '\n' ) {
 
                     // inkrementacia poctu buniek v aktualnom riadku
                     aktualny_pocet_buniek++;
 
-
                     Cell *newptr = realloc(tabulka->zoznam_riadkov[aktualny_pocet_riadkov-1].zoznam_buniek, sizeof(Cell) * aktualny_pocet_buniek);
                     if (newptr == NULL) return NULL;
                     tabulka->zoznam_riadkov[aktualny_pocet_riadkov - 1].zoznam_buniek = newptr;
                     tabulka->zoznam_riadkov[aktualny_pocet_riadkov - 1].pocet_buniek++;
-
 
                     int *novy_obsah;
                     novy_obsah = malloc(sizeof(int));
@@ -198,14 +198,21 @@ Table *load_table_from_file(char *delim, char *delim_string, bool multi_characte
 
             // ak je znak double quote tak sa vypne z modu in quotes
             } else if (znak == 34) {
+
+                // vypne sa in quotes mode
                 in_quotes = false;
+
+                //nacitanie dalsieho znaku lebo quote mozem preskocit
                 znak = fgetc(stdin);
+
+                // -1 pretoze v predoslom cykle sa zvacsil ale
                 dlzka_obsahu--;
             } else {
 
                 //znak sa prida do obsahu
                 tabulka->zoznam_riadkov[aktualny_pocet_riadkov-1].zoznam_buniek[aktualny_pocet_buniek-1].obsah[dlzka_obsahu-1] = znak;
 
+                // zvacsi sa dlzka obsahu v aktualnej bunke
                 tabulka->zoznam_riadkov[aktualny_pocet_riadkov-1].zoznam_buniek[aktualny_pocet_buniek-1].dlzka_obsahu = dlzka_obsahu;
 
 
@@ -214,12 +221,17 @@ Table *load_table_from_file(char *delim, char *delim_string, bool multi_characte
 
                 // ak nie je dalsi znak EOF tak vytvorim nove miesto na dalsi znak
                 if (znak != EOF && znak != '\n' && !is_delim(delim, &delim_string, &multi_character_delim, znak)) {
+
+                    // inkrementacia dlzky obsahu lebo dalsi znak bude tiez patrit do aktualnej bunky
                     dlzka_obsahu++;
 
+                    // alokacia pamate na dalsi znak obsahu
                     int *new_obsah = realloc(tabulka->zoznam_riadkov[aktualny_pocet_riadkov-1].zoznam_buniek[aktualny_pocet_buniek-1].obsah, sizeof(int) * dlzka_obsahu);
 
+                    // konla nuloveho pointra
                     if (new_obsah == NULL) return NULL;
 
+                    // priradenie nenuloveho pointra
                     tabulka->zoznam_riadkov[aktualny_pocet_riadkov-1].zoznam_buniek[aktualny_pocet_buniek-1].obsah = new_obsah;
                 }
 
@@ -230,7 +242,6 @@ Table *load_table_from_file(char *delim, char *delim_string, bool multi_characte
             // nacitanie noveho znaku
             znak = fgetc(stdin);
 
-
             if (znak != EOF) {
 
                 // inkrementacia aktualneho poctu riadkov
@@ -239,26 +250,38 @@ Table *load_table_from_file(char *delim, char *delim_string, bool multi_characte
                 // zvacsenie aktualneho zoznamu riadkov
                 Row *newptr = realloc(tabulka->zoznam_riadkov, sizeof(Row) * aktualny_pocet_riadkov);
 
+                // kontrola nuloveho pointra
                 if (newptr == NULL) return NULL;
 
+                // priradenie nenuloveho pointra
                 tabulka->zoznam_riadkov = newptr;
+
+                // inkrementacia poctu riadkov
                 tabulka->pocet_riadkov++;
 
+                // resetovanie dlzky obsahu
                 dlzka_obsahu = 1;
 
+                // resetovanie poctu buniek v aktualnom riakdu
                 aktualny_pocet_buniek = 1;
 
+                // alokacia pamate na bunku v novom riadku
                 Cell *newcell = realloc(tabulka->zoznam_riadkov[aktualny_pocet_riadkov-1].zoznam_buniek, sizeof(Cell) * aktualny_pocet_buniek);
+
+                // kontrola nuloveho pointra
                 if (newcell == NULL) return NULL;
+
+                // priradenie nenuloveho pointra
                 tabulka->zoznam_riadkov[aktualny_pocet_riadkov-1].zoznam_buniek = newcell;
 
+                // alokacia pamate na obsahu bunky
                 tabulka->zoznam_riadkov[aktualny_pocet_riadkov - 1].zoznam_buniek[aktualny_pocet_buniek - 1].obsah = malloc(sizeof(int));
 
-
+                // resetovanie dlzky obsahu bunky
                 tabulka->zoznam_riadkov[aktualny_pocet_riadkov - 1].zoznam_buniek[aktualny_pocet_buniek - 1].dlzka_obsahu = 1;
 
+                // resetovanie poctu buniek v riadku
                 tabulka->zoznam_riadkov[aktualny_pocet_riadkov - 1].pocet_buniek = 1;
-
             }
         }
     }
@@ -267,30 +290,27 @@ Table *load_table_from_file(char *delim, char *delim_string, bool multi_characte
 }
 
 void print_table (Table *tabulka, char delim) {
+    // vyprintuje celu tabulku, nahradi delimi, kazdy riadok okrem posledneho zalomi
 
     for (int riadok = 0; riadok < tabulka->pocet_riadkov; riadok++) {
         for (int bunka = 0; bunka < tabulka->zoznam_riadkov[riadok].pocet_buniek; bunka++) {
             for (int znak = 0; znak < tabulka->zoznam_riadkov[riadok].zoznam_buniek[bunka].dlzka_obsahu;znak++) {
                 printf("%c", tabulka->zoznam_riadkov[riadok].zoznam_buniek[bunka].obsah[znak]);
             }
-            if (bunka+1 < tabulka->zoznam_riadkov[riadok].pocet_buniek) {
-                printf("%c", delim);
-            }
-
+            if (bunka+1 < tabulka->zoznam_riadkov[riadok].pocet_buniek) printf("%c", delim);
         }
-        printf("\n");
+        if (riadok + 1 < tabulka->pocet_riadkov) printf("\n");
     }
 }
 
 void dealloc_table (Table *tabulka) {
+    // dealokuje celu tabulku vratane structu tabulka, neostane nic
 
     for (int riadok = 0; riadok < tabulka->pocet_riadkov; riadok++) {
         for (int bunka = 0; bunka < tabulka->zoznam_riadkov[riadok].pocet_buniek; bunka ++) {
             free(tabulka->zoznam_riadkov[riadok].zoznam_buniek[bunka].obsah);
-
         }
         free(tabulka->zoznam_riadkov[riadok].zoznam_buniek);
-
     }
     free(tabulka->zoznam_riadkov);
     free(tabulka);
