@@ -38,6 +38,7 @@ char * save_delim_and_args(int argc, char **argv, char *delim, char delim_string
 Table * load_table_from_file(char *delim, char *delim_string, bool multi_character_delim);
 void print_table (Table *tabulka, char delim);
 void dealloc_table (Table *tabulka);
+void level_table(Table *tabulka);
 
 
 
@@ -59,7 +60,6 @@ int main(int argc, char *argv[]) {
 
     // bool ked mam viacznakovy
     bool multi_character_delim = false;
-
 
     // hlavny stavovy automat
     RunMode run_mode = SCAN_DELIM_AND_ARGS;
@@ -316,7 +316,7 @@ void dealloc_table (Table *tabulka) {
     free(tabulka);
 }
 
-char * save_delim_and_args(int argc, char **argv, char *delim, char delim_string[MAX_CELL_SIZE], RunMode *run_mode, bool *multi_character_delim) {
+char *save_delim_and_args(int argc, char **argv, char *delim, char delim_string[MAX_CELL_SIZE], RunMode *run_mode, bool *multi_character_delim) {
     // zisti ci bol zadany delim, ulozi ho, prekopiruje string argumentov string_of_all_params
     if (!strcmp(argv[1], "-d")) {
         if (strlen(argv[2]) > 1) {
@@ -357,5 +357,15 @@ int is_delim (const char *delim, char *delim_string[], const bool *multi_charact
             return 1;
         }
         return 0;
+    }
+}
+
+void level_table(Table *tabulka) {
+    // najde maximalny pocet stlpcov v celej tabulke
+    int max_pocet_stlpcov = 1;
+    for (int riadok = 0; riadok < tabulka->pocet_riadkov; riadok++) {
+        if (tabu) {
+
+        }
     }
 }
