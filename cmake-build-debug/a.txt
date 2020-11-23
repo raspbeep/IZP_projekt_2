@@ -1,3 +1,2 @@
-DEF:G:
-:DEF:GHI:
-DEF:GHI
+A:5:C
+9:E:15
