@@ -11,27 +11,38 @@
 //#define INIT_ROW_COUNT 1
 //#define END_OF_LINE '\0'
 
-typedef enum {IROW, AROW, DROW, ICOL, ACOL, DCOL} Commands;
+typedef enum {IROW, AROW, DROW, ICOL, ACOL, DCOL, SET, CLEAR, SWAP, SUM, AVG, COUNTER, LEN, DEF, USER, } Commands;
 
 // struct premennej, vie v sebe ulozit cislo alebo string
 typedef struct premenna {
-    int typ_premennej; // -1 = neurcena, 0=cislo, 1 = float, 2 = string
-    int cislo;
-    double cislo_f;
-    char *string;
+    int typ_premennej;      // -1 = neurcena, 0 = cislo, 1 = float, 2 = string
+    int cislo;              // miesto na ulozenie cisla
+    double cislo_f;         // miesto na ulozenie floatu
+    char *string;           // miesto na ulozenie stringu
 } Variable;
 
-typedef struct prikaz {
-    int selection[4];
+typedef struct vyber_buniek {
+    int selection[4];       // vyber na konkretne okno buniek
+    bool max;               // indikuje ci je zvoleny aj max parameter
+    bool min;               // min parameter
+    bool find;              // ci bol zvoleny aj find
+    char *find_str;         // ak bol zvoleny find tak potrebuje aj str
+    int pocet_vybranych;    // vybranych buniek v selection
+    int set_selection[4];   // selekcia buniek pre [set]
+} Selection;
 
-    bool max;
-    bool min;
-    bool find;
-    char *find_str;
+typedef struct prikaz {
+    Selection vyber_buniek;
+    Commands prikaz;        // konkretny prikaz z enumu
+    char *set_str;          // strin parameter na argument set STR
+    int param1;             // parameter 1
+    int param2;             // parameter 2
+
 } Arg;
 
 typedef struct prikazy {
     int pocet;
+    Arg *list_of_arguments;
 } Arguments;
 
 typedef struct bunka {
@@ -94,9 +105,8 @@ int main(int argc, char *argv[]) {
 
     // vytvorenie listu pre premenne def _X
     Variable *list_of_variables;
+    // inicializacia listu premennych, naplnia sa nulami, "", a -1
     list_of_variables = init_list_of_variables();
-
-
 
 
     while (run_mode != EXIT) {
@@ -182,11 +192,14 @@ Table *load_table_from_file(char *delim, char *delim_string, bool multi_characte
     // premenna na quotes mode
     bool in_quotes = false;
 
+    // bool na escape char
+    bool escape_char = false;
+
     // kym neskapem
     while (znak != EOF) {
 
         // ak mam delim uzaviem aktualnu bunku a ulozim do aktualneho zoznamu buniek
-        if (is_delim(delim, &delim_string, &multi_character_delim, znak) && !in_quotes) {
+        if (is_delim(delim, &delim_string, &multi_character_delim, znak) && !in_quotes && !escape_char) {
 
             // nacitanie noveho znaku
             znak = fgetc(stdin);
@@ -218,7 +231,6 @@ Table *load_table_from_file(char *delim, char *delim_string, bool multi_characte
                 //ak je znak doublequote tak sa zapne mod in_quotes a preskoci ich
                 if (znak == 34) {
                     in_quotes = true;
-                    znak = fgetc(stdin);
                 }
                 dlzka_obsahu = 1;
 
@@ -251,48 +263,52 @@ Table *load_table_from_file(char *delim, char *delim_string, bool multi_characte
 
             // ak je znak backslash tak ho preskoci
             if (znak == 92) {
-                znak = fgetc(stdin);
+                // zapne sa mode escape_char takze dalsi znak sa ulozi aj keby to bol delim
+                escape_char = true;
 
             // ak je znak double quote tak sa vypne z modu in quotes
-            } else if (znak == 34) {
+            } else if (znak == 34 && in_quotes) {
 
-                // vypne sa in quotes mode
-                in_quotes = false;
+
 
                 //nacitanie dalsieho znaku lebo quote mozem preskocit
                 znak = fgetc(stdin);
 
-                // -1 pretoze v predoslom cykle sa zvacsil ale
-                dlzka_obsahu--;
-            } else {
-
-                //znak sa prida do obsahu
-                tabulka->zoznam_riadkov[aktualny_pocet_riadkov-1].zoznam_buniek[aktualny_pocet_buniek-1].obsah[dlzka_obsahu-1] = znak;
-
-                // zvacsi sa dlzka obsahu v aktualnej bunke
-                tabulka->zoznam_riadkov[aktualny_pocet_riadkov-1].zoznam_buniek[aktualny_pocet_buniek-1].dlzka_obsahu = dlzka_obsahu;
-
-
-                // nacitanie dalsieho znaku
-                znak = fgetc(stdin);
-
-                // ak nie je dalsi znak EOF tak vytvorim nove miesto na dalsi znak
-                if (znak != EOF && znak != '\n' && !is_delim(delim, &delim_string, &multi_character_delim, znak)) {
-
-                    // inkrementacia dlzky obsahu lebo dalsi znak bude tiez patrit do aktualnej bunky
-                    dlzka_obsahu++;
-
-                    // alokacia pamate na dalsi znak obsahu
-                    int *new_obsah = realloc(tabulka->zoznam_riadkov[aktualny_pocet_riadkov-1].zoznam_buniek[aktualny_pocet_buniek-1].obsah, sizeof(int) * dlzka_obsahu);
-
-                    // konla nuloveho pointra
-                    if (new_obsah == NULL) return NULL;
-
-                    // priradenie nenuloveho pointra
-                    tabulka->zoznam_riadkov[aktualny_pocet_riadkov-1].zoznam_buniek[aktualny_pocet_buniek-1].obsah = new_obsah;
+                // ak najdem uvodzovky a dalsi znak je neescapnuty delim tak chcem vypnut in quotes
+                if (is_delim(delim, &delim_string, &multi_character_delim, znak)) {
+                    // vypne sa in quotes mode
+                    in_quotes = false;
                 }
 
             }
+
+            //znak sa prida do obsahu
+            tabulka->zoznam_riadkov[aktualny_pocet_riadkov-1].zoznam_buniek[aktualny_pocet_buniek-1].obsah[dlzka_obsahu-1] = znak;
+
+            // zvacsi sa dlzka obsahu v aktualnej bunke
+            tabulka->zoznam_riadkov[aktualny_pocet_riadkov-1].zoznam_buniek[aktualny_pocet_buniek-1].dlzka_obsahu = dlzka_obsahu;
+
+
+            // nacitanie dalsieho znaku
+            znak = fgetc(stdin);
+
+            // ak nie je dalsi znak EOF tak vytvorim nove miesto na dalsi znak
+            if (znak != EOF && znak != '\n' && !is_delim(delim, &delim_string, &multi_character_delim, znak)) {
+
+                // inkrementacia dlzky obsahu lebo dalsi znak bude tiez patrit do aktualnej bunky
+                dlzka_obsahu++;
+
+                // alokacia pamate na dalsi znak obsahu
+                int *new_obsah = realloc(tabulka->zoznam_riadkov[aktualny_pocet_riadkov-1].zoznam_buniek[aktualny_pocet_buniek-1].obsah, sizeof(int) * dlzka_obsahu);
+
+                // konla nuloveho pointra
+                if (new_obsah == NULL) return NULL;
+
+                // priradenie nenuloveho pointra
+                tabulka->zoznam_riadkov[aktualny_pocet_riadkov-1].zoznam_buniek[aktualny_pocet_buniek-1].obsah = new_obsah;
+            }
+
+
         } else {
             // narazil som na koniec riadku, ulozim obsah bunky do Cell
 
@@ -473,3 +489,5 @@ void dealloc_variables(Variable *list) {
         free(list[i].string);
     }
 }
+
+void
