@@ -462,6 +462,7 @@ char *save_delim_and_args(int argc, char **argv, char *delim, char delim_string[
         char *string_of_all_params = malloc(sizeof(char) * (strlen(argv[3]) + 1));
 
         strcpy(string_of_all_params, argv[3]);
+        string_of_all_params[strlen(argv[3])] = '\0';
         return string_of_all_params;
 
     } else {
@@ -470,6 +471,7 @@ char *save_delim_and_args(int argc, char **argv, char *delim, char delim_string[
 
         char *string_of_all_params = malloc(sizeof(char) * (strlen(argv[3]) + 1));
         strcpy(string_of_all_params, argv[3]);
+        string_of_all_params[strlen(argv[3])] = '\0';
         return string_of_all_params;
 
     }
@@ -587,6 +589,10 @@ void init_selection(Selection *aktualna_selekcia) {
 
 }
 
+void dealloc_selection(Selection *aktualna_selekcia) {
+    free(aktualna_selekcia->find_str);
+}
+
 Arguments *parse_arguments(const char *string, Table *tabulka) {
     ParseMode parse_mode;
 
@@ -604,8 +610,7 @@ Arguments *parse_arguments(const char *string, Table *tabulka) {
 
     int position_of_next_bracket;
 
-
-
+    // prehladavanie vsetkych argumentov a spustanie funkcii
     while (string[position] != '\0') {
 
         // ak narazim na hranate zatvorky a za nimi nie je "m"([max],[min]) ani "f"([find])
@@ -635,14 +640,13 @@ Arguments *parse_arguments(const char *string, Table *tabulka) {
 
             // tmp postition zacina na position
             int tmp_position = position;
-            int cele_cislo = 0;
-
 
             // string do ktoreho ulozim priestor medzi kazdymi dvomi ciarkami
             // stanovena max dlzka zo zadania
             char tmp_string[MAX_ARGUMENT_LENGTH] = "";
+            int cele_cislo = 0;
 
-            cele_cislo = (int)strtol(tmp_string, NULL, 10);
+            //cele_cislo = (int)strtol(tmp_string, NULL, 10);
 
             // kolko cifier ma aktualne cislo
             int dlzka_cisla = 0;
@@ -676,6 +680,7 @@ Arguments *parse_arguments(const char *string, Table *tabulka) {
                 for (int x = 0; x < dlzka_cisla; x++) {
                     tmp_string[x] = string[tmp_position + 1 + x];
                 }
+                cele_cislo = (int)strtol(tmp_string, NULL, 10);
 
                 // uzavretie tmp_string na poslendom mieste
                 tmp_string[dlzka_cisla] = '\0';
@@ -902,7 +907,136 @@ Arguments *parse_arguments(const char *string, Table *tabulka) {
             }
         }
 
+        // ak narazim na [find STR]
+        else if (string[position] == '[' && string[position + 1] == 'f') {
 
+
+            //na tejto pozicii zacina retazec STR
+            position_of_next_bracket = position + 6;
+
+            // najdem prvu neescapenutu ']'
+            while (string[position_of_next_bracket] != ']' || string[position_of_next_bracket - 1] == 92) {
+                position_of_next_bracket++;
+                if (string[position_of_next_bracket] == ']' && string[position_of_next_bracket - 1] !=  '\\') {
+                    break;
+                }
+            }
+
+            char tmp_string[MAX_ARGUMENT_LENGTH] = "";
+            for (int i = position + 6, j = 0; i < position_of_next_bracket; i++, j++) {
+                tmp_string[j] = string[i];
+            }
+            tmp_string[position_of_next_bracket] = '\0';position++;
+
+
+            // zistim kolko riadkov a stlpcov mam prehladat, + 1 pretoze ak mam od prveho po treti riadok tak je to 3 ale 3-1=2
+            int pocet_riadkov = aktualna_selekcia->selection[2] - aktualna_selekcia->selection[0] + 1;
+
+            //  zistim kolko stlpcov mam prehladat
+            int pocet_stlpcov = aktualna_selekcia->selection[3] - aktualna_selekcia->selection[1] + 1;
+
+            // ak mam v selekcii iba jednu bunku
+            if (pocet_riadkov == 1 && pocet_stlpcov == 1) {
+                char string_v_bunke[MAX_ARGUMENT_LENGTH] = "";
+
+                // prekopirovanie bunky do prechodneho stringu na porovnanie
+                for (int x = 0; x < tabulka->zoznam_riadkov[aktualna_selekcia->selection[0] - 1].zoznam_buniek[aktualna_selekcia->selection[1] - 1].dlzka_obsahu; x++) {
+                    string_v_bunke[x] = (char)tabulka->zoznam_riadkov[aktualna_selekcia->selection[0] - 1].zoznam_buniek[aktualna_selekcia->selection[1] - 1].obsah[x];
+                }
+
+                // uzavretie stringu
+                string_v_bunke[tabulka->zoznam_riadkov[aktualna_selekcia->selection[0] - 1].zoznam_buniek[aktualna_selekcia->selection[1] - 1].dlzka_obsahu] = '\0';
+
+                // ak je string v argumente [find STR] zhodny so stringom v bunke
+                if (strstr(tmp_string, string_v_bunke)) {
+                    aktualna_selekcia->find = true;
+                    char *p;
+                    p = malloc((strlen(string_v_bunke)+1) * sizeof(char));
+                    if (p != NULL) {
+                        aktualna_selekcia->find_str = p;
+
+                        for (int x = 0; x < tabulka->zoznam_riadkov[aktualna_selekcia->selection[0] - 1].zoznam_buniek[aktualna_selekcia->selection[1] - 1].dlzka_obsahu; x++) {
+                            aktualna_selekcia->find_str[x] = (char)tabulka->zoznam_riadkov[aktualna_selekcia->selection[0] - 1].zoznam_buniek[aktualna_selekcia->selection[1] - 1].obsah[x];
+                        }
+                    }
+                }
+
+            } else {
+
+                // bool aby som ulozil iba prvu bunku s vyskytom stringu vo [find STR]
+                bool found_string = false;
+
+                // ulozenie rozsahu ktory budem prehladavat
+                int min_riadok = aktualna_selekcia->selection[0] - 1;
+                int min_bunka = aktualna_selekcia->selection[1] - 1;
+
+                int max_riadok = aktualna_selekcia->selection[2] - 1;
+                int max_bunka = aktualna_selekcia->selection[3] - 1;
+
+                for (int row = min_riadok; row <= max_riadok; row++){
+                    for (int col = min_bunka; col <= max_bunka; col++) {
+                        if (!found_string) {
+
+                            // vytvorenie prechodneho stringu
+                            char string_v_bunke[MAX_ARGUMENT_LENGTH] = "";
+
+                            for (int znak = 0; znak < tabulka->zoznam_riadkov[row].zoznam_buniek[col].dlzka_obsahu; znak++) {
+                                string_v_bunke[znak] = (char)tabulka->zoznam_riadkov[row].zoznam_buniek[col].obsah[znak];
+                            }
+
+                            // hlada substringy, vrati NULL ak ho v danom stringu nenaslo
+                            if(strstr(string_v_bunke, tmp_string) != NULL) {
+                                found_string = true;
+
+                                aktualna_selekcia->find = true;
+                                char *p;
+                                p = malloc((strlen(string_v_bunke) + 1) * sizeof(char));
+                                if (p != NULL) {
+                                    aktualna_selekcia->find_str = p;
+
+                                    // skopirovanie stringu to mallocovaneho miesta v aktualnej selekcii
+                                    for (int x = 0; x < tabulka->zoznam_riadkov[aktualna_selekcia->selection[row]].zoznam_buniek[aktualna_selekcia->selection[col]].dlzka_obsahu; x++) {
+                                        aktualna_selekcia->find_str[x] = (char) tabulka->zoznam_riadkov[aktualna_selekcia->selection[row]].zoznam_buniek[aktualna_selekcia->selection[col]].obsah[x];
+                                    }
+                                    // uzavretie stringu v aktualnej selekcii
+                                    aktualna_selekcia->find_str[tabulka->zoznam_riadkov[aktualna_selekcia->selection[row]].zoznam_buniek[aktualna_selekcia->selection[col]].dlzka_obsahu] = '\0';
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            // nastavenie pozicie na najblizsi dalsi oddelovac
+            position = position_of_next_bracket+1;
+
+        }
+
+        // TODO dorobit [_] pre obnovenie vyberu z docasnej premennej
+
+        else if (string[position] == 'i' && string[position + 1] == 'r') {
+            int position_of_next_delim = position;
+            char command[100] = "";
+            int position_in_command = 0;
+            while (string[position_of_next_delim] != ';' && string[position_of_next_delim] != '\0') {
+                command[position_in_command] = string[position_of_next_delim];
+                position_in_command++;
+                position_of_next_delim++;
+            }
+            command[position_of_next_delim] = '\0';
+
+            // overenie ci to je skutocne irow
+            if (strstr(command, "irow") != NULL) {
+                irow(table);
+            }
+
+        }
+
+
+        else {
+            position++;
+        }
     }
 
 }
+
+void irow(Table tabulka)
