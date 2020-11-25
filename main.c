@@ -64,7 +64,7 @@ typedef struct tabulka {
 typedef enum {SCAN_DELIM, AWAIT_DELIM, DONE} DelimMode;
 typedef enum {SCAN_DELIM_AND_ARGS, EXIT}RunMode;//, RUN, ALL_DONE, RANGE_ERROR, EMPTY_FILE} RunMode;
 int is_delim (const char *delim, char *delim_string[], const bool *multi_character_delim, int znak);
-char * save_delim_and_args(int argc, char **argv, char *delim, char delim_string[], RunMode *run_mode, bool *multi_character_delim);
+char * save_delim_and_args(int argc, char **argv, char *delim, char delim_string[], bool *multi_character_delim);
 Table * load_table_from_file(char *delim, char *delim_string, bool multi_character_delim);
 void print_table (Table *tabulka, char delim);
 void dealloc_table (Table *tabulka);
@@ -74,14 +74,27 @@ Variable *init_list_of_variables();
 Arguments *parse_arguments (const char *string_of_all_params, Table *tabulka);
 int verified_int (const char string[]);
 void init_selection(Selection *aktualna_selekcia);
+void zero_selection(Selection *aktualna_selekcia);
 
-int main(int argc, char *argv[]) {
+
+
+// FUNKCIE NA UPRAVU STRUKTURY TABULKY
+bool irow(Table *tabulka, Selection *aktualna_selekcia);
+bool arow(Table *tabulka, Selection *aktualna_selekcia);
+bool drow(Table *tabulka, Selection *aktualna_selekcia);
+bool icol(Table *tabulka, Selection *aktualna_selekcia);
+bool acol(Table *tabulka, Selection *aktualna_selekcia);
+bool dcol(Table *tabulka, Selection *aktualna_selekcia);
+
+
+
+        int main(int argc, char *argv[]) {
 
     // neboli zadane ziadne argumenty
     if (argc == 1) return 2;
 
     // presmerovanie stdin pretoze CLion to nepodporuje ako stdin < na vstupe
-    freopen("a.txt","r",stdin);
+    //freopen("a.txt","r",stdin);
 
     // jednoznakovy delim
     char delim;
@@ -115,7 +128,7 @@ int main(int argc, char *argv[]) {
             case SCAN_DELIM_AND_ARGS:
 
                 // ulozenie delimov a string_of_all_params
-                string_of_all_params = save_delim_and_args(argc, argv, &delim, delim_string, &run_mode, &multi_character_delim);
+                string_of_all_params = save_delim_and_args(argc, argv, &delim, delim_string, &multi_character_delim);
 
                 // nacitanie tabulky do trojrozmerneho structov
                 tabulka = load_table_from_file(&delim, delim_string, multi_character_delim);
@@ -124,9 +137,11 @@ int main(int argc, char *argv[]) {
                 level_table(tabulka);
 
                 // basic vytlacenie tabulky
-                print_table(tabulka, delim);
+
 
                 parse_arguments(string_of_all_params, tabulka);
+
+                print_table(tabulka, delim);
 
                 //save_args(argv);
 
@@ -163,6 +178,7 @@ Table *load_table_from_file(char *delim, char *delim_string, bool multi_characte
     // alokacia pamate pre struct bunka
     Table *tabulka;
     tabulka = malloc(sizeof(Table));
+    if (tabulka == NULL) return NULL;
 
     // dlzka aktualnej bunky
     int dlzka_obsahu = 1;
@@ -170,11 +186,24 @@ Table *load_table_from_file(char *delim, char *delim_string, bool multi_characte
     // prvotna inicializacia structov
     //vytvori sa zoznam riadkov, prvy riadok, zoznam buniek, bunka a obsah
     tabulka->pocet_riadkov = 1;
-    tabulka->zoznam_riadkov = malloc(sizeof(Row) * 1);
-    tabulka->zoznam_riadkov->zoznam_buniek = malloc(sizeof(Cell) * 1);
+
+    Row *new_row;
+    new_row = malloc(sizeof(Row) * 1);
+    if (new_row == NULL) return NULL;
+    tabulka->zoznam_riadkov = new_row;
+
+    Cell *new_cell;
+    new_cell = malloc(sizeof(Cell) * 1);
+    if (new_cell == NULL) return NULL;
+    tabulka->zoznam_riadkov->zoznam_buniek = new_cell;
+
     tabulka->zoznam_riadkov->pocet_buniek = 1;
     tabulka->zoznam_riadkov->zoznam_buniek->dlzka_obsahu = dlzka_obsahu;
-    tabulka->zoznam_riadkov->zoznam_buniek->obsah = malloc(sizeof(int));
+
+    int *new_content;
+    new_content = malloc(sizeof(int));
+    if (new_content == NULL) return NULL;
+    tabulka->zoznam_riadkov->zoznam_buniek->obsah = new_content;
 
     // pocet buniek ktore som uz presiel v aktualnom riadku
     int aktualny_pocet_riadkov = 1;
@@ -207,7 +236,8 @@ Table *load_table_from_file(char *delim, char *delim_string, bool multi_characte
                 aktualny_pocet_buniek++;
 
                 // zvacsenie zoznamu aktualnych buniek
-                Cell *newptr = realloc(tabulka->zoznam_riadkov[aktualny_pocet_riadkov-1].zoznam_buniek, sizeof(Cell) * aktualny_pocet_buniek);
+                Cell *newptr;
+                newptr = realloc(tabulka->zoznam_riadkov[aktualny_pocet_riadkov-1].zoznam_buniek, sizeof(Cell) * aktualny_pocet_buniek);
 
                 // overenie pointra
                 if (newptr == NULL) return NULL;
@@ -223,7 +253,9 @@ Table *load_table_from_file(char *delim, char *delim_string, bool multi_characte
                     in_quotes = true;
 
                     // alokacia novej pamate na obsah bunky
-                    tabulka->zoznam_riadkov[aktualny_pocet_riadkov-1].zoznam_buniek[aktualny_pocet_buniek - 1].obsah = malloc(sizeof(int) * 2);
+                    int *new_ptr = malloc(sizeof(int) * 2);
+                    if (new_ptr == NULL) return NULL;
+                    tabulka->zoznam_riadkov[aktualny_pocet_riadkov-1].zoznam_buniek[aktualny_pocet_buniek - 1].obsah = new_ptr;
 
                     // uvodzovky sa pridaju na zaciatok obsahu bunky
                     tabulka->zoznam_riadkov[aktualny_pocet_riadkov-1].zoznam_buniek[aktualny_pocet_buniek-1].obsah[0] = 34;
@@ -236,7 +268,9 @@ Table *load_table_from_file(char *delim, char *delim_string, bool multi_characte
                 }else {
 
                     // alokacia novej pamate na obsah bunky
-                    tabulka->zoznam_riadkov[aktualny_pocet_riadkov-1].zoznam_buniek[aktualny_pocet_buniek - 1].obsah = malloc(sizeof(int));
+                    int *new_ptr = malloc(sizeof(int));
+                    if (new_ptr == NULL) return NULL;
+                    tabulka->zoznam_riadkov[aktualny_pocet_riadkov-1].zoznam_buniek[aktualny_pocet_buniek - 1].obsah = new_ptr;
 
                     //resetovanie dlzky obsahu novej bunky
                     tabulka->zoznam_riadkov[aktualny_pocet_riadkov-1].zoznam_buniek[aktualny_pocet_buniek - 1].dlzka_obsahu = 1;
@@ -252,7 +286,8 @@ Table *load_table_from_file(char *delim, char *delim_string, bool multi_characte
                     aktualny_pocet_buniek++;
 
                     // alokacia pamate na novy pocet buniek
-                    Cell *newptr = realloc(tabulka->zoznam_riadkov[aktualny_pocet_riadkov-1].zoznam_buniek, sizeof(Cell) * aktualny_pocet_buniek);
+                    Cell *newptr;
+                    newptr = realloc(tabulka->zoznam_riadkov[aktualny_pocet_riadkov-1].zoznam_buniek, sizeof(Cell) * aktualny_pocet_buniek);
                     if (newptr == NULL) return NULL;
                     tabulka->zoznam_riadkov[aktualny_pocet_riadkov - 1].zoznam_buniek = newptr;
                     tabulka->zoznam_riadkov[aktualny_pocet_riadkov - 1].pocet_buniek++;
@@ -343,7 +378,8 @@ Table *load_table_from_file(char *delim, char *delim_string, bool multi_characte
                 dlzka_obsahu++;
 
                 // alokacia pamate na dalsi znak obsahu
-                int *new_obsah = realloc(tabulka->zoznam_riadkov[aktualny_pocet_riadkov-1].zoznam_buniek[aktualny_pocet_buniek-1].obsah, sizeof(int) * dlzka_obsahu);
+                int *new_obsah;
+                new_obsah = realloc(tabulka->zoznam_riadkov[aktualny_pocet_riadkov-1].zoznam_buniek[aktualny_pocet_buniek-1].obsah, sizeof(int) * dlzka_obsahu);
 
                 // konla nuloveho pointra
                 if (new_obsah == NULL) return NULL;
@@ -357,7 +393,8 @@ Table *load_table_from_file(char *delim, char *delim_string, bool multi_characte
                 dlzka_obsahu++;
 
                 // alokacia pamate na dalsi znak obsahu
-                int *new_obsah = realloc(tabulka->zoznam_riadkov[aktualny_pocet_riadkov-1].zoznam_buniek[aktualny_pocet_buniek-1].obsah, sizeof(int) * dlzka_obsahu);
+                int *new_obsah;
+                new_obsah = realloc(tabulka->zoznam_riadkov[aktualny_pocet_riadkov-1].zoznam_buniek[aktualny_pocet_buniek-1].obsah, sizeof(int) * dlzka_obsahu);
 
                 // konla nuloveho pointra
                 if (new_obsah == NULL) return NULL;
@@ -380,7 +417,8 @@ Table *load_table_from_file(char *delim, char *delim_string, bool multi_characte
                 aktualny_pocet_riadkov++;
 
                 // zvacsenie aktualneho zoznamu riadkov
-                Row *newptr = realloc(tabulka->zoznam_riadkov, sizeof(Row) * aktualny_pocet_riadkov);
+                Row *newptr;
+                newptr = realloc(tabulka->zoznam_riadkov, sizeof(Row) * aktualny_pocet_riadkov);
 
                 // kontrola nuloveho pointra
                 if (newptr == NULL) return NULL;
@@ -398,7 +436,8 @@ Table *load_table_from_file(char *delim, char *delim_string, bool multi_characte
                 aktualny_pocet_buniek = 1;
 
                 // alokacia pamate na bunku v novom riadku
-                Cell *newcell = realloc(tabulka->zoznam_riadkov[aktualny_pocet_riadkov-1].zoznam_buniek, sizeof(Cell) * aktualny_pocet_buniek);
+                Cell *newcell;
+                newcell = realloc(tabulka->zoznam_riadkov[aktualny_pocet_riadkov-1].zoznam_buniek, sizeof(Cell) * aktualny_pocet_buniek);
 
                 // kontrola nuloveho pointra
                 if (newcell == NULL) return NULL;
@@ -448,7 +487,13 @@ void dealloc_table (Table *tabulka) {
     free(tabulka);
 }
 
-char *save_delim_and_args(int argc, char **argv, char *delim, char delim_string[MAX_DELIM_SIZE], RunMode *run_mode, bool *multi_character_delim) {
+void zero_selection(Selection *aktualna_selekcia) {
+    for (int i = 0; i < 4; i++) {
+        aktualna_selekcia->selection[i] = 0;
+    }
+}
+
+char *save_delim_and_args(int argc, char **argv, char *delim, char delim_string[MAX_DELIM_SIZE], bool *multi_character_delim) {
     // zisti ci bol zadany delim, ulozi ho, prekopiruje string argumentov string_of_all_params
     if (!strcmp(argv[1], "-d")) {
         if (strlen(argv[2]) > 1) {
@@ -549,6 +594,7 @@ void dealloc_variables(Variable *list) {
     for (int i = 0; i < 10; i++) {
         free(list[i].string);
     }
+    free(list);
 }
 
 int verified_int (const char string[]) {
@@ -594,7 +640,6 @@ void dealloc_selection(Selection *aktualna_selekcia) {
 }
 
 Arguments *parse_arguments(const char *string, Table *tabulka) {
-    ParseMode parse_mode;
 
     // vytvorenie pointra na aktualnu selekciu
     Selection *aktualna_selekcia;
@@ -617,6 +662,7 @@ Arguments *parse_arguments(const char *string, Table *tabulka) {
         // tak to znamena ze po najblizsiu ']' budem mat 2-4 parametre
         if (string[position] == '[' && string[position + 1] != 'm' && string[position + 1] != 'f') {
 
+            zero_selection(aktualna_selekcia);
 
             // chcem hladat ']' hned od dalsej pozicie
             position_of_next_bracket = position + 1;
@@ -771,7 +817,6 @@ Arguments *parse_arguments(const char *string, Table *tabulka) {
             // ak potrebujem najst min/max z vyberu kde je viac buniek
             if (pocet_riadkov != 1 && pocet_stlpcov != 1) {
 
-                int cislo;
                 int min_riadok = aktualna_selekcia->selection[0] - 1;
                 int min_bunka = aktualna_selekcia->selection[1] - 1;
 
@@ -877,7 +922,7 @@ Arguments *parse_arguments(const char *string, Table *tabulka) {
                                 if (!found_number) {
                                     min_number = curr_number;
                                     found_number = true;
-                                    found_max = true;
+                                    found_min = true;
 
                                     // kontrola ci je najdene cislo vacsie ako doterajsie max_number
                                 }
@@ -893,7 +938,7 @@ Arguments *parse_arguments(const char *string, Table *tabulka) {
 
                             // ak nasiel aspon jedno cislo tak ulozi
 
-                            if (found_max) {
+                            if (found_min) {
                                 aktualna_selekcia->min = true;
                                 aktualna_selekcia->selection[0] = row;
                                 aktualna_selekcia->selection[2] = row;
@@ -1026,17 +1071,389 @@ Arguments *parse_arguments(const char *string, Table *tabulka) {
 
             // overenie ci to je skutocne irow
             if (strstr(command, "irow") != NULL) {
-                irow(table);
+                irow(tabulka, aktualna_selekcia);
             }
 
+            position = position_of_next_delim;
         }
 
+        else if (string[position] == 'a' && string[position + 1] == 'r') {
+            int position_of_next_delim = position;
+            char command[100] = "";
+            int position_in_command = 0;
+            while (string[position_of_next_delim] != ';' && string[position_of_next_delim] != '\0') {
+                command[position_in_command] = string[position_of_next_delim];
+                position_in_command++;
+                position_of_next_delim++;
+            }
+            command[position_of_next_delim] = '\0';
+
+            // overenie ci to je skutocne arow
+            if (strstr(command, "arow") != NULL) {
+                arow(tabulka, aktualna_selekcia);
+            }
+
+            position = position_of_next_delim;
+        }
+
+        else if (string[position] == 'd' && string[position + 1] == 'r') {
+            int position_of_next_delim = position;
+            char command[100] = "";
+            int position_in_command = 0;
+            while (string[position_of_next_delim] != ';' && string[position_of_next_delim] != '\0') {
+                command[position_in_command] = string[position_of_next_delim];
+                position_in_command++;
+                position_of_next_delim++;
+            }
+            command[position_of_next_delim] = '\0';
+
+            // overenie ci to je skutocne drow
+            if (strstr(command, "drow") != NULL) {
+                drow(tabulka, aktualna_selekcia);
+            }
+
+            position = position_of_next_delim;
+        }
+
+        else if (string[position] == 'i' && string[position + 1] == 'c') {
+            int position_of_next_delim = position;
+            char command[100] = "";
+            int position_in_command = 0;
+            while (string[position_of_next_delim] != ';' && string[position_of_next_delim] != '\0') {
+                command[position_in_command] = string[position_of_next_delim];
+                position_in_command++;
+                position_of_next_delim++;
+            }
+            command[position_of_next_delim] = '\0';
+
+            // overenie ci to je skutocne icol
+            if (strstr(command, "icol") != NULL) {
+                icol(tabulka, aktualna_selekcia);
+            }
+
+            position = position_of_next_delim;
+        }
+
+        else if (string[position] == 'a' && string[position + 1] == 'c') {
+            int position_of_next_delim = position;
+            char command[100] = "";
+            int position_in_command = 0;
+            while (string[position_of_next_delim] != ';' && string[position_of_next_delim] != '\0') {
+                command[position_in_command] = string[position_of_next_delim];
+                position_in_command++;
+                position_of_next_delim++;
+            }
+            command[position_of_next_delim] = '\0';
+
+            // overenie ci to je skutocne acol
+            if (strstr(command, "acol") != NULL) {
+                acol(tabulka, aktualna_selekcia);
+            }
+
+            position = position_of_next_delim;
+        }
+
+        else if (string[position] == 'd' && string[position + 1] == 'c') {
+            int position_of_next_delim = position;
+            char command[100] = "";
+            int position_in_command = 0;
+            while (string[position_of_next_delim] != ';' && string[position_of_next_delim] != '\0') {
+                command[position_in_command] = string[position_of_next_delim];
+                position_in_command++;
+                position_of_next_delim++;
+            }
+            command[position_of_next_delim] = '\0';
+
+            // overenie ci to je skutocne dcol
+            if (strstr(command, "dcol") != NULL) {
+                dcol(tabulka, aktualna_selekcia);
+            }
+
+            position = position_of_next_delim;
+        }
 
         else {
             position++;
         }
     }
+    free(aktualna_selekcia);
 
 }
 
-void irow(Table tabulka)
+bool irow(Table *tabulka, Selection *aktualna_selekcia) {
+    // funkcia ktora vlozi jeden prazdny riadok pred selekciu buniek
+
+    // row pred ktory budem davat prazdny riadok
+    // je to vzdy pred nultym indexm v selection
+    int row = aktualna_selekcia->selection[0];
+
+    // pocet buniek ktore musim vlozit do prazdneho stlpca
+    int pocet_buniek_v_stlpcoch = tabulka->zoznam_riadkov[0].pocet_buniek;
+
+    // pocet riadkov v tabulke
+    int pocet_riadkov_v_tabulke = tabulka->pocet_riadkov;
+
+    // inkrementacia poctu riadkov v celej tabulke
+    tabulka->pocet_riadkov++;
+
+    // zvacsenie aktualneho zoznamu riadkov na novy pocet riadkov
+    Row *newptr = realloc(tabulka->zoznam_riadkov, sizeof(Row) * tabulka->pocet_riadkov);
+
+    // kontrola nuloveho pointra
+    if (newptr == NULL) return false;
+
+    // priradenie nenuloveho pointra
+    tabulka->zoznam_riadkov = newptr;
+
+    // poposuvanie pointrov +1 od riadka pred ktory vkladam prazdny riadok
+    //
+    for (int riadok = pocet_riadkov_v_tabulke - 1;riadok > row - 2; riadok--) {
+        tabulka->zoznam_riadkov[riadok + 1] = tabulka->zoznam_riadkov[riadok];
+    }
+
+    // alokacia pamate na pocet buniek ako v ostatnych riadkoch vo zvysku tabulky
+    Cell *new_cells = malloc(sizeof(Cell) * pocet_buniek_v_stlpcoch);
+
+    // kontrola nuloveho pointra
+    if (new_cells == NULL) return false;
+
+    // priradenie nenuloveho pointra
+    tabulka->zoznam_riadkov[row - 1].zoznam_buniek = new_cells;
+
+    // alokacia pamate na obsah buniek v pridanom riadku
+    // nastavenie dlzky ich obsahu na 1 (\0)
+    for (int bunka = 0;bunka < pocet_buniek_v_stlpcoch; bunka++) {
+
+        int *new_obsah = malloc(sizeof(int));
+
+        if (new_obsah == NULL) return false;
+        *new_obsah='\0';
+        tabulka->zoznam_riadkov[row-1].zoznam_buniek[bunka].obsah = new_obsah;
+        tabulka->zoznam_riadkov[row-1].zoznam_buniek[bunka].dlzka_obsahu = 1;
+    }
+
+    // true, vsetko sa podarilo
+    return true;
+}
+
+bool arow(Table *tabulka, Selection *aktualna_selekcia) {
+    // funkcia ktora vlozi jeden prazdny riadok za selekciu buniek
+
+    // row za ktory budem davat prazdny riadok
+    // je to vzdy pred nultym indexm v selection
+    int row = aktualna_selekcia->selection[2];
+
+    // pocet buniek ktore musim vlozit do prazdneho stlpca
+    int pocet_buniek_v_stlpcoch = tabulka->zoznam_riadkov[0].pocet_buniek;
+
+    // pocet buniek v kazdom stlpci
+    int pocet_riadkov_v_tabulke = tabulka->pocet_riadkov;
+
+    // zvacsenie aktualneho zoznamu riadkov, +1 lebo jeden pridavam
+    Row *newptr = realloc(tabulka->zoznam_riadkov, sizeof(Row) * (pocet_riadkov_v_tabulke + 1));
+
+    // inkrementacia poctu riadkov v celej tabulke
+    tabulka->pocet_riadkov++;
+
+    // kontrola nuloveho pointra
+    if (newptr == NULL) return false;
+
+    // priradenie nenuloveho pointra
+    tabulka->zoznam_riadkov = newptr;
+
+    // poposuvanie pointrov +1 od riadka pred ktory vkladam prazdny riadok
+    for (int riadok = pocet_riadkov_v_tabulke - 1; riadok > row - 1 ; riadok--) {
+        tabulka->zoznam_riadkov[riadok + 1] = tabulka->zoznam_riadkov[riadok];
+    }
+
+    // alokacia pamate na pocet buniek ako v ostatnych riadkoch vo zvysku tabulky
+    Cell *new_cells = malloc(sizeof(Cell) * pocet_buniek_v_stlpcoch);
+
+    // kontrola nuloveho pointra
+    if (new_cells == NULL) return false;
+
+    // priradenie nenuloveho pointra
+    tabulka->zoznam_riadkov[row].zoznam_buniek = new_cells;
+
+    // alokacia pamate na obsah buniek v pridanom riadku
+    // nastavenie dlzky ich obsahu na 1 (\0)
+    for (int bunka = 0 ; bunka < pocet_buniek_v_stlpcoch ; bunka++) {
+
+        int *new_obsah = malloc(sizeof(int));
+
+        if (new_obsah == NULL) return false;
+
+        tabulka->zoznam_riadkov[row].zoznam_buniek[bunka].obsah = new_obsah;
+        tabulka->zoznam_riadkov[row].zoznam_buniek[bunka].dlzka_obsahu = 1;
+    }
+
+    // true, vsetko sa podarilo
+    return true;
+}
+
+bool drow(Table *tabulka, Selection *aktualna_selekcia) {
+    // funkcia ktora odstrani riadky vo vybranej selekcii
+
+    // prvy riadok na zmazanie
+    int row_from = aktualna_selekcia->selection[0];
+
+    // posledny riadok na zmazanie
+    int row_to = aktualna_selekcia->selection[2];
+
+    // pocet buniek v kazdom riadku
+    int pocet_buniek_v_riadku = tabulka->zoznam_riadkov->pocet_buniek;
+
+    // pocet riadkov na zmazanie
+    int n_of_row_to_delete = row_to - row_from + 1;
+
+    // freeovanie obsahov buniek,  v riadkoch na zmazanie
+    for (int riadok = row_from - 1 ; riadok < row_to ; riadok++) {
+        for (int bunka = 0; bunka < pocet_buniek_v_riadku; bunka++) {
+            free(tabulka->zoznam_riadkov[riadok].zoznam_buniek[bunka].obsah);
+        }
+        free(tabulka->zoznam_riadkov[riadok].zoznam_buniek);
+    }
+
+
+    for (int nova_pozicia = row_from - 1, stara_pozicia = row_to; stara_pozicia < tabulka->pocet_riadkov; nova_pozicia++, stara_pozicia++) {
+        tabulka->zoznam_riadkov[nova_pozicia] = tabulka->zoznam_riadkov[stara_pozicia];
+    }
+
+    // dekrementacia na novy pocet riadkov
+    tabulka->pocet_riadkov = tabulka->pocet_riadkov - n_of_row_to_delete;
+
+    // nadze sigabrt pri inpute [2,1];irow;[1,1,1,1];drow
+    Row *nove_riadky = realloc(tabulka->zoznam_riadkov, sizeof(Row) * tabulka->pocet_riadkov - 1);
+
+    if (nove_riadky == NULL) return false;
+
+    tabulka->zoznam_riadkov = nove_riadky;
+
+    // true, vsetko sa podarilo
+    return true;
+}
+
+bool icol(Table *tabulka, Selection *aktualna_selekcia) {
+
+    int insert_before = aktualna_selekcia->selection[1];
+
+    // new number of cells in each row
+    int new_n_of_cols = tabulka->zoznam_riadkov->pocet_buniek + 1;
+
+
+    for (int riadok = 0; riadok < tabulka->pocet_riadkov; riadok++) {
+
+        // inkrementacia poctu buniek v riadku
+        tabulka->zoznam_riadkov[riadok].pocet_buniek = new_n_of_cols;
+
+        // alokacia pamate na novu bunku
+        Cell *new_cells = realloc(tabulka->zoznam_riadkov[riadok].zoznam_buniek, sizeof(Cell) * new_n_of_cols);
+
+        // overenie nenuloveho pointra
+        if (new_cells == NULL) return NULL;
+
+        // priradenie novej pamate na dany riaodk
+        tabulka->zoznam_riadkov[riadok].zoznam_buniek = new_cells;
+
+        // presun buniek na nove pozicie
+        for (int nova_pozicia = new_n_of_cols - 1, stara_pozicia = new_n_of_cols - 2; stara_pozicia >= insert_before - 1; nova_pozicia--, stara_pozicia--) {
+            tabulka->zoznam_riadkov[riadok].zoznam_buniek[nova_pozicia] = tabulka->zoznam_riadkov[riadok].zoznam_buniek[stara_pozicia];
+        }
+
+        // alokacia pamate na novu bunku
+        int *new_content = malloc(sizeof(int));
+
+        // overenie nenuloveho pointra novej bunky
+        if (new_content == NULL) return NULL;
+
+        *new_content = '\0';
+
+        // priradenie obsahu novej bunky
+        tabulka->zoznam_riadkov[riadok].zoznam_buniek[insert_before - 1].obsah = new_content;
+        tabulka->zoznam_riadkov[riadok].zoznam_buniek[insert_before - 1].dlzka_obsahu = 1;
+    }
+
+    //true, vsetko sa podarilo
+    return true;
+}
+
+bool acol(Table *tabulka, Selection *aktualna_selekcia) {
+
+    int insert_after = aktualna_selekcia->selection[3];
+
+    // new number of cells in each row
+    int new_n_of_cols = tabulka->zoznam_riadkov->pocet_buniek + 1;
+
+
+    for (int riadok = 0; riadok < tabulka->pocet_riadkov; riadok++) {
+
+        // inkrementacia poctu buniek v riadku
+        tabulka->zoznam_riadkov[riadok].pocet_buniek = new_n_of_cols;
+
+        // alokacia pamate na novu bunku
+        Cell *new_cells = realloc(tabulka->zoznam_riadkov[riadok].zoznam_buniek, sizeof(Cell) * new_n_of_cols);
+
+        // overenie nenuloveho pointra
+        if (new_cells == NULL) return NULL;
+
+        // priradenie novej pamate na dany riaodk
+        tabulka->zoznam_riadkov[riadok].zoznam_buniek = new_cells;
+
+        // presun buniek na nove pozicie
+        for (int nova_pozicia = new_n_of_cols - 1, stara_pozicia = new_n_of_cols - 2; stara_pozicia >= insert_after; nova_pozicia--, stara_pozicia--) {
+            tabulka->zoznam_riadkov[riadok].zoznam_buniek[nova_pozicia] = tabulka->zoznam_riadkov[riadok].zoznam_buniek[stara_pozicia];
+        }
+
+        // alokacia pamate na novu bunku
+        int *new_content = malloc(sizeof(int));
+
+        // overenie nenuloveho pointra novej bunky
+        if (new_content == NULL) return NULL;
+
+        *new_content = '\0';
+
+        // priradenie obsahu novej bunky
+        tabulka->zoznam_riadkov[riadok].zoznam_buniek[insert_after].obsah = new_content;
+        tabulka->zoznam_riadkov[riadok].zoznam_buniek[insert_after].dlzka_obsahu = 1;
+    }
+
+    //true, vsetko sa podarilo
+    return true;
+}
+
+bool dcol(Table *tabulka, Selection *aktualna_selekcia) {
+
+    int delete_from = aktualna_selekcia->selection[1];
+
+    int delete_to = aktualna_selekcia->selection[3];
+
+    int n_of_cols_to_delete = delete_to - delete_from + 1;
+
+    // new number of cells in each row
+    int new_n_of_cols = tabulka->zoznam_riadkov->pocet_buniek - n_of_cols_to_delete;
+
+
+    for (int riadok = 0; riadok < tabulka->pocet_riadkov; riadok++) {
+
+        // inkrementacia poctu buniek v riadku
+        tabulka->zoznam_riadkov[riadok].pocet_buniek = new_n_of_cols;
+
+        for (int bunka = delete_from - 1; bunka < delete_to; bunka++) {
+            free(tabulka->zoznam_riadkov[riadok].zoznam_buniek[bunka].obsah);
+        }
+
+
+        // presun buniek na nove pozicie
+        for (int nova_pozicia = delete_from - 1, stara_pozicia = delete_to; stara_pozicia <= new_n_of_cols + 1; nova_pozicia++, stara_pozicia++) {
+            tabulka->zoznam_riadkov[riadok].zoznam_buniek[nova_pozicia] = tabulka->zoznam_riadkov[riadok].zoznam_buniek[stara_pozicia];
+        }
+
+        Cell *new_row = realloc(tabulka->zoznam_riadkov[riadok].zoznam_buniek, sizeof(Cell) * new_n_of_cols);
+
+
+    }
+
+    //true, vsetko sa podarilo
+    return true;
+}
+
