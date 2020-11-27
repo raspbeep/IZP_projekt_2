@@ -8,6 +8,7 @@
 #define MAX_DELIM_SIZE 101
 
 // TODO dorobit file input ako posledny argument zo vstupu
+// TODO mallocovat agrument string
 
 typedef enum {IROW, AROW, DROW, ICOL, ACOL, DCOL, SET, CLEAR, SWAP, SUM, AVG, COUNTER, LEN, DEF, USER, } Commands;
 
@@ -75,8 +76,9 @@ Arguments *parse_arguments (const char *string_of_all_params, Table *tabulka);
 int verified_int (const char string[]);
 void init_selection(Selection *aktualna_selekcia);
 void zero_selection(Selection *aktualna_selekcia);
-
-
+bool refill_table (Table *tabulka, Selection *aktualna_selekcia);
+bool set_selection (Table *tabulka, Selection *aktualna_selekcia, int *position, int *position_of_next_bracket, const char *string);
+bool extract_params(const char *string, int *position, int pos_of_first_n, int *param1, int *param2);
 
 // FUNKCIE NA UPRAVU STRUKTURY TABULKY
 bool irow(Table *tabulka, Selection *aktualna_selekcia);
@@ -86,15 +88,19 @@ bool icol(Table *tabulka, Selection *aktualna_selekcia);
 bool acol(Table *tabulka, Selection *aktualna_selekcia);
 bool dcol(Table *tabulka, Selection *aktualna_selekcia);
 
+bool set_str (Table *tabulka, Selection *aktualna_selekcia, char string_param[1000]);
+bool clear(Table *tabulka, Selection *aktualna_selekcia);
+bool swap(Table *tabulka, Selection *aktualna_selekcia, int row, int col);
+bool sum(Table *tabulka, Selection *aktualna_selekcia, int row, int col);
+bool avg(Table *tabulka, Selection *aktualna_selekcia, int row, int col);
+bool count(Table *tabulka, Selection *aktualna_selekcia, int row, int col);
 
 
-        int main(int argc, char *argv[]) {
+
+int main(int argc, char *argv[]) {
 
     // neboli zadane ziadne argumenty
     if (argc == 1) return 2;
-
-    // presmerovanie stdin pretoze CLion to nepodporuje ako stdin < na vstupe
-    //freopen("a.txt","r",stdin);
 
     // jednoznakovy delim
     char delim;
@@ -102,7 +108,6 @@ bool dcol(Table *tabulka, Selection *aktualna_selekcia);
     // buffer na viacznakovy delim
     char delim_string[MAX_DELIM_SIZE] = "";
     // bool ci som nasiel zadany delim
-
 
     // bool ked mam viacznakovy
     bool multi_character_delim = false;
@@ -123,6 +128,8 @@ bool dcol(Table *tabulka, Selection *aktualna_selekcia);
 
     Arguments *list_of_arguments;
 
+    int exit_code = 0;
+
     while (run_mode != EXIT) {
         switch (run_mode) {
             case SCAN_DELIM_AND_ARGS:
@@ -139,7 +146,7 @@ bool dcol(Table *tabulka, Selection *aktualna_selekcia);
                 // basic vytlacenie tabulky
 
 
-                parse_arguments(string_of_all_params, tabulka);
+                if (parse_arguments(string_of_all_params, tabulka) == NULL) exit_code = -1;
 
                 print_table(tabulka, delim);
 
@@ -167,7 +174,7 @@ bool dcol(Table *tabulka, Selection *aktualna_selekcia);
     // dealokacia listu premennych
     dealloc_variables(list_of_variables);
 
-    return 0;
+    return exit_code;
 }
 
 Table *load_table_from_file(char *delim, char *delim_string, bool multi_character_delim) {
@@ -465,9 +472,18 @@ void print_table (Table *tabulka, char delim) {
 
     for (int riadok = 0; riadok < tabulka->pocet_riadkov; riadok++) {
         for (int bunka = 0; bunka < tabulka->zoznam_riadkov[riadok].pocet_buniek; bunka++) {
-            for (int znak = 0; znak < tabulka->zoznam_riadkov[riadok].zoznam_buniek[bunka].dlzka_obsahu;znak++) {
-                printf("%c", tabulka->zoznam_riadkov[riadok].zoznam_buniek[bunka].obsah[znak]);
+            if (tabulka->zoznam_riadkov[riadok].zoznam_buniek[bunka].dlzka_obsahu == 1) {
+                if (tabulka->zoznam_riadkov[riadok].zoznam_buniek[bunka].obsah[0] != '\0') {
+                    for (int znak = 0; znak < tabulka->zoznam_riadkov[riadok].zoznam_buniek[bunka].dlzka_obsahu;znak++) {
+                        printf("%c", tabulka->zoznam_riadkov[riadok].zoznam_buniek[bunka].obsah[znak]);
+                    }
+                }
+            }else {
+                for (int znak = 0; znak < tabulka->zoznam_riadkov[riadok].zoznam_buniek[bunka].dlzka_obsahu;znak++) {
+                    printf("%c", tabulka->zoznam_riadkov[riadok].zoznam_buniek[bunka].obsah[znak]);
+                }
             }
+
             if (bunka+1 < tabulka->zoznam_riadkov[riadok].pocet_buniek) printf("%c", delim);
         }
         if (riadok + 1 < tabulka->pocet_riadkov) printf("\n");
@@ -539,7 +555,7 @@ int is_delim (const char *delim, char *delim_string[], const bool *multi_charact
     }
 }
 
-void level_table(Table *tabulka) {
+void level_table (Table *tabulka) {
     // najde maximalny pocet stlpcov v celej tabulke a dorovna tabulku na tento pocet v kazdom riadku
 
     int max_pocet_stlpcov = 1;
@@ -576,7 +592,7 @@ void level_table(Table *tabulka) {
     }
 }
 
-Variable *init_list_of_variables(){
+Variable *init_list_of_variables (){
     Variable *list;
     list = malloc(sizeof(Variable) * 10);
 
@@ -590,7 +606,7 @@ Variable *init_list_of_variables(){
     return list;
 }
 
-void dealloc_variables(Variable *list) {
+void dealloc_variables (Variable *list) {
     for (int i = 0; i < 10; i++) {
         free(list[i].string);
     }
@@ -623,7 +639,7 @@ int verified_int (const char string[]) {
     return 1;
 }
 
-void init_selection(Selection *aktualna_selekcia) {
+void init_selection (Selection *aktualna_selekcia) {
 
     for (int i = 0; i < 4; i++) aktualna_selekcia->selection[i] = 0;
     aktualna_selekcia->selection_type = 0;
@@ -635,8 +651,319 @@ void init_selection(Selection *aktualna_selekcia) {
 
 }
 
-void dealloc_selection(Selection *aktualna_selekcia) {
+void dealloc_selection (Selection *aktualna_selekcia) {
     free(aktualna_selekcia->find_str);
+}
+
+bool refill_table (Table *tabulka, Selection *aktualna_selekcia) {
+
+    int rows_over = aktualna_selekcia->selection[2] - tabulka->pocet_riadkov;
+    int cols_over = aktualna_selekcia->selection[3] - tabulka->zoznam_riadkov->pocet_buniek;
+
+    if (rows_over > 0) {
+
+        // alokacia pamate na nove riadky
+        Row *new_rows = realloc(tabulka->zoznam_riadkov, sizeof(Row) * aktualna_selekcia->selection[2]);
+
+        if (new_rows == NULL) return false;
+
+        tabulka->zoznam_riadkov = new_rows;
+
+        for (int riadok = tabulka->pocet_riadkov; riadok < aktualna_selekcia->selection[2]; riadok++) {
+
+            Cell *new_cells;
+            new_cells = malloc(sizeof(Cell) * tabulka->zoznam_riadkov->pocet_buniek);
+
+            if (new_cells == NULL) return false;
+
+            tabulka->zoznam_riadkov[riadok].zoznam_buniek = new_cells;
+
+            for (int bunka = 0; bunka < tabulka->zoznam_riadkov->pocet_buniek; bunka++) {
+
+                int *new_content = malloc(sizeof(int));
+
+                if (new_content == NULL) return false;
+
+                *new_content = '\0';
+
+                tabulka->zoznam_riadkov[riadok].zoznam_buniek[bunka].obsah = new_content;
+                tabulka->zoznam_riadkov[riadok].zoznam_buniek[bunka].dlzka_obsahu = 1;
+
+            }
+        }
+        tabulka->pocet_riadkov =  aktualna_selekcia->selection[2];
+    }
+
+    if (cols_over > 0) {
+        for (int riadok = 0; riadok < aktualna_selekcia->selection[2]; riadok++) {
+
+            Cell *new_row;
+
+            new_row = realloc(tabulka->zoznam_riadkov[riadok].zoznam_buniek, sizeof(Cell) * aktualna_selekcia->selection[3]);
+
+            if(new_row == NULL) return false;
+
+            tabulka->zoznam_riadkov[riadok].zoznam_buniek = new_row;
+
+            for (int bunka = tabulka->zoznam_riadkov[riadok].pocet_buniek; bunka < aktualna_selekcia->selection[3]; bunka++) {
+
+                int *new_content = malloc(sizeof(int));
+
+                if (new_content == NULL) return false;
+
+                *new_content = '\0';
+
+                tabulka->zoznam_riadkov[riadok].zoznam_buniek[bunka].obsah = new_content;
+                tabulka->zoznam_riadkov[riadok].zoznam_buniek[bunka].dlzka_obsahu = 1;
+
+            }
+
+            tabulka->zoznam_riadkov[riadok].pocet_buniek = aktualna_selekcia->selection[3];
+
+        }
+    }
+
+    return true;
+}
+
+bool verify_command (const char *string_of_all_params, int *position, char verif_command[4]) {
+    int position_of_next_delim = *position;
+    char command[100] = "";
+    int position_in_command = 0;
+    while (string_of_all_params[position_of_next_delim] != ';' && string_of_all_params[position_of_next_delim] != '\0') {
+        command[position_in_command] = string_of_all_params[position_of_next_delim];
+        position_in_command++;
+        position_of_next_delim++;
+    }
+    command[position_of_next_delim] = '\0';
+
+    *position = position_of_next_delim;
+
+    // overenie ci to je skutocne irow
+    if (strstr(command, verif_command) != NULL) {
+        return true;
+    }else {
+        return false;
+    }
+
+}
+
+bool set_selection (Table *tabulka, Selection *aktualna_selekcia, int *position, int *position_of_next_bracket, const char *string) {
+    zero_selection(aktualna_selekcia);
+
+    // chcem hladat ']' hned od dalsej pozicie
+    *position_of_next_bracket = *position + 1;
+    int pocet_ciarok = 0;
+    int pozicia_ciarok[3] = {0};
+
+    // najdenie pozicie uzatvarajucej ']'
+    while(string[*position_of_next_bracket] != ']') {
+
+        // ak su po ceste nejakej ',' tak si ulozim ich pocet a poziciu
+        if (string[*position_of_next_bracket] == ',') {
+
+            // ulozenie pozicie
+            pozicia_ciarok[pocet_ciarok] = *position_of_next_bracket;
+
+            //ulozenie poctu ciarok
+            pocet_ciarok++;
+        }
+        *position_of_next_bracket = *position_of_next_bracket + 1;
+    };
+
+    if (pocet_ciarok != 1 && pocet_ciarok != 3) return false;
+
+    // tmp postition zacina na position
+    int tmp_position = *position;
+
+    // string do ktoreho ulozim priestor medzi kazdymi dvomi ciarkami
+    // stanovena max dlzka zo zadania
+    char tmp_string[MAX_ARGUMENT_LENGTH] = "";
+    int cele_cislo = 0;
+
+    //cele_cislo = (int)strtol(tmp_string, NULL, 10);
+
+    // kolko cifier ma aktualne cislo
+    int dlzka_cisla = 0;
+
+    // ulozenie kazdeho cisla do parametra structu aktualna_selekcia
+    for (int i = 0; i < pocet_ciarok + 1; i++) {
+
+        // zistenie v akom rozsahu sa nachadza dalsie cislo
+        if (pocet_ciarok == 1) {
+
+            if (i==0) {
+                dlzka_cisla = pozicia_ciarok[i] - tmp_position - 1;
+            } else {
+                dlzka_cisla = *position_of_next_bracket - tmp_position - 1;
+            }
+            // ak mam 3 ciarky a teda 4 parametre
+        } else {
+
+            if (i < 3) {
+
+                // od poslednej ciarky po dalsiu ciarku
+                dlzka_cisla = pozicia_ciarok[i] - tmp_position - 1;
+            } else {
+
+                // od poslednej ciarky po dalsiu zatvorku ']'
+                dlzka_cisla = *position_of_next_bracket - tmp_position - 1;
+            };
+        }
+
+        // skopirovanie jedneho cisla do tmp_string
+        for (int x = 0; x < dlzka_cisla; x++) {
+            tmp_string[x] = string[tmp_position + 1 + x];
+        }
+
+        // uzavretie tmp_string na poslendom mieste
+        tmp_string[dlzka_cisla] = '\0';
+
+        bool pomlcka = false;
+
+        if (pocet_ciarok == 3 && tmp_string[0] == '-' && tmp_string[1] == '\0') pomlcka = true;
+
+
+        // ak narazim na parameter bez cisla [_,1] alebo [1,_]
+        if (tmp_string[0] == '_' && tmp_string[1] == '\0') {
+
+            // ak je to selekcia s dvomi parametrami
+            if (pocet_ciarok == 1) {
+
+                // ak je _ na nultej pozicii [_,1]
+                if (i == 0) {
+
+                    // idem od nulteho riadka
+                    aktualna_selekcia->selection[0] = 1;
+
+                    // az po posledny riadok
+                    aktualna_selekcia->selection[2] = tabulka->pocet_riadkov;
+
+                    // vyber typu selekcie
+                    aktualna_selekcia->selection_type = 1;
+
+                    // ak je na prvej pozicii [1,_]
+                } else {
+
+                    // idem od prveho stlpca
+                    aktualna_selekcia->selection[1] = 1;
+
+                    // az po posledny stlpec (v celej tabulke by mal byt rovnaky pocet buniek v kazdom riadku)
+                    aktualna_selekcia->selection[3] = tabulka->zoznam_riadkov->pocet_buniek;
+                }
+            }
+        } else
+
+            cele_cislo = (int)strtol(tmp_string, NULL, 10);
+
+        if (pocet_ciarok == 1) {
+
+            // ak som na prvom cisle z dvoch
+            if (i == 0) {
+
+                // ulozenie prveho cisla
+                aktualna_selekcia->selection[0] = cele_cislo;
+
+                // ulozenie prveho cisla
+                aktualna_selekcia->selection[2] = cele_cislo;
+
+                // nastavenie typu selekcie
+                aktualna_selekcia->selection_type = 0;
+
+                // som na druhom cisle z dvoch
+            } else {
+                // nastavenie druheho cisla
+                aktualna_selekcia->selection[1] = cele_cislo;
+
+                // nastavenie druheho cisla
+                aktualna_selekcia->selection[3] = cele_cislo;
+            }
+
+            // ak mam 3 ciarky, teda 4 parametre
+        } else {
+            if (pomlcka) {
+                if (i == 2) {
+                    aktualna_selekcia->selection[i] = tabulka->pocet_riadkov;
+                }else if (i == 3){
+                    aktualna_selekcia->selection[i] = tabulka->zoznam_riadkov->pocet_buniek;
+                }
+            } else {
+                // nastavenie i-teho cisla na aktualny parameter
+                aktualna_selekcia->selection[i] = cele_cislo;
+            }
+
+
+        }
+        // posun na poziciu dlasej ciarky
+        tmp_position = pozicia_ciarok[i];
+
+    }
+    // posuvam sa v hlavnom stringu o 1 lebo chcem znak za najblizsou dvojbodkou
+    *position = *position_of_next_bracket + 1;
+    return true;
+}
+
+bool extract_params(const char *string, int *position, int pos_of_first_n, int *param1, int *param2) {
+    // index na ktorom je prve cislo
+    int tmp_position = *position + pos_of_first_n;
+
+    char tmp_string[1000] = "";
+
+    while (string[tmp_position] != ',' && string[tmp_position] != '\0') {
+        tmp_position++;
+    }
+
+    for (int znak = *position + pos_of_first_n, position_in_string = 0; znak < tmp_position;znak++, position_in_string++) {
+        tmp_string[position_in_string] = string[znak];
+    }
+
+    *position = tmp_position + 1;
+
+    // vytvorenie miesta na string ak by v bunke nebolo iba cislo napr. '3.14abc'
+    char endptr1[MAX_ARGUMENT_LENGTH] = "";
+
+    // pointer na prvy znak v endptr kvoli funkcii strtod
+    char *p1_ptr = endptr1;
+
+    // inicializacia aktualneho cisla
+    double curr_number1 = 0.0;
+
+    curr_number1 = strtod(tmp_string, &p1_ptr);
+
+    if (p1_ptr == NULL) return false;
+
+    *param1 = (int)curr_number1;
+
+    tmp_position++;
+
+    while (string[tmp_position] != ']' && string[tmp_position] != '\0') {
+        tmp_position++;
+    }
+
+    int last_index = 0;
+    for (int znak = *position, position_in_string = 0; znak < tmp_position;znak++, position_in_string++) {
+        tmp_string[position_in_string] = string[znak];
+        last_index++;
+    }
+
+    tmp_string[last_index] = '\0';
+
+    // vytvorenie miesta na string ak by v bunke nebolo iba cislo napr. '3.14abc'
+    char endptr2[MAX_ARGUMENT_LENGTH] = "";
+
+    // pointer na prvy znak v endptr kvoli funkcii strtod
+    char *p2_ptr = endptr1;
+
+    // inicializacia aktualneho cisla
+    double curr_number2 = 0.0;
+
+    curr_number2 = strtod(tmp_string, &p2_ptr);
+
+    if (p2_ptr == NULL) return false;
+
+    *param2 = (int)curr_number2;
+    *position = tmp_position;
+    return true;
 }
 
 Arguments *parse_arguments(const char *string, Table *tabulka) {
@@ -662,145 +989,7 @@ Arguments *parse_arguments(const char *string, Table *tabulka) {
         // tak to znamena ze po najblizsiu ']' budem mat 2-4 parametre
         if (string[position] == '[' && string[position + 1] != 'm' && string[position + 1] != 'f') {
 
-            zero_selection(aktualna_selekcia);
-
-            // chcem hladat ']' hned od dalsej pozicie
-            position_of_next_bracket = position + 1;
-            int pocet_ciarok = 0;
-            int pozicia_ciarok[3] = {0};
-
-            // najdenie pozicie uzatvarajucej ']'
-            while(string[position_of_next_bracket] != ']') {
-
-                // ak su po ceste nejakej ',' tak si ulozim ich pocet a poziciu
-                if (string[position_of_next_bracket] == ',') {
-
-                    // ulozenie pozicie
-                    pozicia_ciarok[pocet_ciarok] = position_of_next_bracket;
-
-                    //ulozenie poctu ciarok
-                    pocet_ciarok++;
-                }
-                position_of_next_bracket++;
-            };
-
-            // tmp postition zacina na position
-            int tmp_position = position;
-
-            // string do ktoreho ulozim priestor medzi kazdymi dvomi ciarkami
-            // stanovena max dlzka zo zadania
-            char tmp_string[MAX_ARGUMENT_LENGTH] = "";
-            int cele_cislo = 0;
-
-            //cele_cislo = (int)strtol(tmp_string, NULL, 10);
-
-            // kolko cifier ma aktualne cislo
-            int dlzka_cisla = 0;
-
-            // ulozenie kazdeho cisla do parametra selekcia structu aktualna_selekcia
-            for (int i = 0; i < pocet_ciarok + 1; i++) {
-
-                // zistenie v akom rozsahu sa nachadza dalsie cislo
-                if (pocet_ciarok == 1) {
-
-                    if (i==0) {
-                        dlzka_cisla = pozicia_ciarok[i] - tmp_position - 1;
-                    } else {
-                        dlzka_cisla = position_of_next_bracket - tmp_position - 1;
-                    }
-                // ak mam 3 ciarky a teda 4 parametre
-                } else if (pocet_ciarok == 3) {
-
-                    if (i < 3) {
-
-                        // od poslednej ciarky po dalsiu ciarku
-                        dlzka_cisla = pozicia_ciarok[i] - tmp_position - 1;
-                    } else {
-
-                        // od poslednej ciarky po dalsiu zatvorku ']'
-                        dlzka_cisla = position_of_next_bracket - tmp_position - 1;
-                    };
-                }
-
-                // skopirovanie jedneho cisla do tmp_string
-                for (int x = 0; x < dlzka_cisla; x++) {
-                    tmp_string[x] = string[tmp_position + 1 + x];
-                }
-                cele_cislo = (int)strtol(tmp_string, NULL, 10);
-
-                // uzavretie tmp_string na poslendom mieste
-                tmp_string[dlzka_cisla] = '\0';
-
-            // ak narazim na parameter bez cisla [_,1]
-            if (tmp_string[0] == '_' && tmp_string[1] == '\0') {
-
-                // ak je to selekcia s dvomi parametrami
-                if (pocet_ciarok == 1) {
-
-                    // ak je _ na nultej pozicii [_,1]
-                    if (i == 0) {
-
-                        // idem od nulteho riadka
-                        aktualna_selekcia->selection[0] = 1;
-
-                        // az po posledny riadok
-                        aktualna_selekcia->selection[2] = tabulka->pocet_riadkov;
-
-                        // vyber typu selekcie
-                        aktualna_selekcia->selection_type = 1;
-
-                    // ak je na prvej pozicii [1,_]
-                    } else {
-
-                        // idem od prveho stlpca
-                        aktualna_selekcia->selection[1] = 1;
-
-                        // az po posledny stlpec (v celej tabulke by mal byt rovnaky pocet buniek v kazdom riadku)
-                        aktualna_selekcia->selection[3] = tabulka->zoznam_riadkov->pocet_buniek;
-                    }
-                }
-            } else
-
-            // overenie ci je zadany korektny parameter
-            //if(!verified_int(tmp_string)) return NULL;
-
-            // pretypovanie zo str na int
-
-
-            if (pocet_ciarok == 1) {
-
-                // ak som na prvom cisle z dvoch
-                if (i == 0) {
-
-                    // ulozenie prveho cisla
-                    aktualna_selekcia->selection[0] = cele_cislo;
-
-                    // ulozenie prveho cisla
-                    aktualna_selekcia->selection[2] = cele_cislo;
-
-                    // nastavenie typu selekcie
-                    aktualna_selekcia->selection_type = 0;
-
-                // som na druhom cisle z dvoch
-                } else {
-                    // nastavenie druheho cisla
-                    aktualna_selekcia->selection[1] = cele_cislo;
-
-                    // nastavenie druheho cisla
-                    aktualna_selekcia->selection[3] = cele_cislo;
-                }
-
-            // ak mam 3 ciarky, teda 4 parametre
-                } else {
-
-                    // nastavenie i-teho cisla na aktualny parameter
-                    aktualna_selekcia->selection[i] = cele_cislo;
-                }
-                // posun na poziciu dlasej ciarky
-                tmp_position = pozicia_ciarok[i];
-            }
-            // posuvam sa v hlavnom stringu o 1 lebo chcem znak za najblizsou dvojbodkou
-            position = position_of_next_bracket + 1;
+            if (!set_selection(tabulka, aktualna_selekcia, &position, &position_of_next_bracket, string)) return NULL;
         }
 
         // ak narazim na [max] alebo [min]
@@ -952,7 +1141,7 @@ Arguments *parse_arguments(const char *string, Table *tabulka) {
             }
         }
 
-        // ak narazim na [find STR]
+        // [find STR]
         else if (string[position] == '[' && string[position + 1] == 'f') {
 
 
@@ -1058,130 +1247,137 @@ Arguments *parse_arguments(const char *string, Table *tabulka) {
 
         // TODO dorobit [_] pre obnovenie vyberu z docasnej premennej
 
+        // irow
         else if (string[position] == 'i' && string[position + 1] == 'r') {
-            int position_of_next_delim = position;
-            char command[100] = "";
-            int position_in_command = 0;
-            while (string[position_of_next_delim] != ';' && string[position_of_next_delim] != '\0') {
-                command[position_in_command] = string[position_of_next_delim];
-                position_in_command++;
-                position_of_next_delim++;
+            if (verify_command(string, &position, "irow")) {
+                if(!irow(tabulka, aktualna_selekcia)) return NULL;
             }
-            command[position_of_next_delim] = '\0';
-
-            // overenie ci to je skutocne irow
-            if (strstr(command, "irow") != NULL) {
-                irow(tabulka, aktualna_selekcia);
-            }
-
-            position = position_of_next_delim;
         }
 
+        // arow
         else if (string[position] == 'a' && string[position + 1] == 'r') {
-            int position_of_next_delim = position;
-            char command[100] = "";
-            int position_in_command = 0;
-            while (string[position_of_next_delim] != ';' && string[position_of_next_delim] != '\0') {
-                command[position_in_command] = string[position_of_next_delim];
-                position_in_command++;
-                position_of_next_delim++;
+            if (verify_command(string, &position, "arow")) {
+                if(!arow(tabulka, aktualna_selekcia)) return NULL;
             }
-            command[position_of_next_delim] = '\0';
-
-            // overenie ci to je skutocne arow
-            if (strstr(command, "arow") != NULL) {
-                arow(tabulka, aktualna_selekcia);
-            }
-
-            position = position_of_next_delim;
         }
 
+        // drow
         else if (string[position] == 'd' && string[position + 1] == 'r') {
-            int position_of_next_delim = position;
-            char command[100] = "";
-            int position_in_command = 0;
-            while (string[position_of_next_delim] != ';' && string[position_of_next_delim] != '\0') {
-                command[position_in_command] = string[position_of_next_delim];
-                position_in_command++;
-                position_of_next_delim++;
+            if (verify_command(string, &position, "drow")) {
+                if(!drow(tabulka, aktualna_selekcia)) return NULL;
             }
-            command[position_of_next_delim] = '\0';
-
-            // overenie ci to je skutocne drow
-            if (strstr(command, "drow") != NULL) {
-                drow(tabulka, aktualna_selekcia);
-            }
-
-            position = position_of_next_delim;
         }
 
+        // icol
         else if (string[position] == 'i' && string[position + 1] == 'c') {
-            int position_of_next_delim = position;
-            char command[100] = "";
-            int position_in_command = 0;
-            while (string[position_of_next_delim] != ';' && string[position_of_next_delim] != '\0') {
-                command[position_in_command] = string[position_of_next_delim];
-                position_in_command++;
-                position_of_next_delim++;
+            if (verify_command(string, &position, "icol")) {
+                if(!icol(tabulka, aktualna_selekcia)) return NULL;
             }
-            command[position_of_next_delim] = '\0';
-
-            // overenie ci to je skutocne icol
-            if (strstr(command, "icol") != NULL) {
-                icol(tabulka, aktualna_selekcia);
-            }
-
-            position = position_of_next_delim;
         }
 
+        // acol
         else if (string[position] == 'a' && string[position + 1] == 'c') {
-            int position_of_next_delim = position;
-            char command[100] = "";
-            int position_in_command = 0;
-            while (string[position_of_next_delim] != ';' && string[position_of_next_delim] != '\0') {
-                command[position_in_command] = string[position_of_next_delim];
-                position_in_command++;
-                position_of_next_delim++;
+            if (verify_command(string, &position, "acol")) {
+                if(!acol(tabulka, aktualna_selekcia)) return NULL;
             }
-            command[position_of_next_delim] = '\0';
-
-            // overenie ci to je skutocne acol
-            if (strstr(command, "acol") != NULL) {
-                acol(tabulka, aktualna_selekcia);
-            }
-
-            position = position_of_next_delim;
         }
 
+        // dcol
         else if (string[position] == 'd' && string[position + 1] == 'c') {
-            int position_of_next_delim = position;
-            char command[100] = "";
-            int position_in_command = 0;
-            while (string[position_of_next_delim] != ';' && string[position_of_next_delim] != '\0') {
-                command[position_in_command] = string[position_of_next_delim];
-                position_in_command++;
-                position_of_next_delim++;
+            if (verify_command(string, &position, "dcol")) {
+                if(!dcol(tabulka, aktualna_selekcia)) return NULL;
             }
-            command[position_of_next_delim] = '\0';
-
-            // overenie ci to je skutocne dcol
-            if (strstr(command, "dcol") != NULL) {
-                dcol(tabulka, aktualna_selekcia);
-            }
-
-            position = position_of_next_delim;
         }
+
+        // set STR
+        else if (string[position] == 's' && string[position + 1] == 'e' && string[position + 2] == 't') {
+
+            int position_of_string_end = position + 4;
+
+            char string_param[1000] = "";
+
+            int pos_in_str_param = 0;
+
+            // najdem prvu neescapenutu ';'
+
+            while(string[position_of_string_end]) {
+
+                if (string[position_of_string_end] == '\0') {
+                    break;
+                } else
+
+                if (string[position_of_string_end] == ';' && string[position_of_string_end - 1] != '\\') {
+                    break;
+                } else {
+                    string_param[pos_in_str_param] = string[position_of_string_end];
+                    pos_in_str_param++;
+                    position_of_string_end++;
+                }
+
+            }
+            string_param[pos_in_str_param + 1] = '\0';
+            set_str(tabulka, aktualna_selekcia, string_param);
+
+            position = position_of_string_end + 1;
+        }
+
+        // clear
+        else if (string[position] == 'c' && string[position + 1] == 'l' && string[position + 2] == 'e' &&
+                string[position + 3] == 'a' && string[position + 4] == 'r') {
+
+            if (!clear(tabulka, aktualna_selekcia)) return NULL;
+
+            position = position + 5;
+        }
+
+        //swap
+        else if (string[position] == 's' && string[position + 1] == 'w' && string[position + 2] == 'a' &&
+                string[position + 3] == 'p') {
+            int param1, param2;
+
+            if (!extract_params(string, &position, 6, &param1, &param2)) return NULL;
+            if (!swap(tabulka, aktualna_selekcia, param1, param2)) return NULL;
+        }
+
+        else if (string[position] == 's' && string[position + 1] == 'u' && string[position + 2] == 'm') {
+            int param1, param2;
+
+            if (!extract_params(string, &position, 5, &param1, &param2)) return NULL;
+            if (!sum(tabulka, aktualna_selekcia, param1, param2)) return NULL;
+
+        }
+
+        else if (string[position] == 'a' && string[position + 1] == 'v' && string[position + 2] == 'g') {
+            int param1, param2;
+
+            if (!extract_params(string, &position, 5, &param1, &param2)) return NULL;
+            if (!avg(tabulka, aktualna_selekcia, param1, param2)) return NULL;
+        }
+
+        else if (string[position] == 'c' && string[position + 1] == 'o' && string[position + 2] == 'u' &&
+        string[position + 3] == 'n' && string[position + 4] == 't') {
+            int param1, param2;
+
+            if (!extract_params(string, &position, 7, &param1, &param2)) return NULL;
+
+            if (!count(tabulka, aktualna_selekcia, param1, param2)) return NULL;
+        }
+
 
         else {
             position++;
         }
     }
+    dealloc_selection(aktualna_selekcia);
     free(aktualna_selekcia);
 
 }
 
 bool irow(Table *tabulka, Selection *aktualna_selekcia) {
     // funkcia ktora vlozi jeden prazdny riadok pred selekciu buniek
+
+    // ak je selekcia vacsia ako rozmery tabulky, doplni sa
+    refill_table(tabulka, aktualna_selekcia);
 
     // row pred ktory budem davat prazdny riadok
     // je to vzdy pred nultym indexm v selection
@@ -1239,6 +1435,9 @@ bool irow(Table *tabulka, Selection *aktualna_selekcia) {
 bool arow(Table *tabulka, Selection *aktualna_selekcia) {
     // funkcia ktora vlozi jeden prazdny riadok za selekciu buniek
 
+    // ak je selekcia vacsia ako rozmery tabulky, doplni sa
+    refill_table(tabulka, aktualna_selekcia);
+
     // row za ktory budem davat prazdny riadok
     // je to vzdy pred nultym indexm v selection
     int row = aktualna_selekcia->selection[2];
@@ -1294,6 +1493,9 @@ bool arow(Table *tabulka, Selection *aktualna_selekcia) {
 bool drow(Table *tabulka, Selection *aktualna_selekcia) {
     // funkcia ktora odstrani riadky vo vybranej selekcii
 
+    // ak je selekcia vacsia ako rozmery tabulky, doplni sa
+    refill_table(tabulka, aktualna_selekcia);
+
     // prvy riadok na zmazanie
     int row_from = aktualna_selekcia->selection[0];
 
@@ -1334,6 +1536,10 @@ bool drow(Table *tabulka, Selection *aktualna_selekcia) {
 }
 
 bool icol(Table *tabulka, Selection *aktualna_selekcia) {
+    // funkcia vlozi stlpec pred selekciu
+
+    // ak je selekcia vacsia ako rozmery tabulky, doplni sa
+    refill_table(tabulka, aktualna_selekcia);
 
     int insert_before = aktualna_selekcia->selection[1];
 
@@ -1378,6 +1584,10 @@ bool icol(Table *tabulka, Selection *aktualna_selekcia) {
 }
 
 bool acol(Table *tabulka, Selection *aktualna_selekcia) {
+    // function appends an empty row after selection
+
+    // ak je selekcia vacsia ako rozmery tabulky, doplni sa
+    refill_table(tabulka, aktualna_selekcia);
 
     int insert_after = aktualna_selekcia->selection[3];
 
@@ -1422,6 +1632,10 @@ bool acol(Table *tabulka, Selection *aktualna_selekcia) {
 }
 
 bool dcol(Table *tabulka, Selection *aktualna_selekcia) {
+    // function that deletes columns in selection
+
+    // ak je selekcia vacsia ako rozmery tabulky, doplni sa
+    refill_table(tabulka, aktualna_selekcia);
 
     int delete_from = aktualna_selekcia->selection[1];
 
@@ -1448,8 +1662,8 @@ bool dcol(Table *tabulka, Selection *aktualna_selekcia) {
             tabulka->zoznam_riadkov[riadok].zoznam_buniek[nova_pozicia] = tabulka->zoznam_riadkov[riadok].zoznam_buniek[stara_pozicia];
         }
 
+        // zmensenie pamate na novy pocet buniek
         Cell *new_row = realloc(tabulka->zoznam_riadkov[riadok].zoznam_buniek, sizeof(Cell) * new_n_of_cols);
-
 
     }
 
@@ -1457,3 +1671,323 @@ bool dcol(Table *tabulka, Selection *aktualna_selekcia) {
     return true;
 }
 
+bool set_str (Table *tabulka, Selection *aktualna_selekcia, char string_param[1000]) {
+    // function that copies STR parameter into every cell in selection
+
+    // ak je selekcia vacsia ako rozmery tabulky, doplni sa
+    refill_table(tabulka, aktualna_selekcia);
+
+    // ulozenie selekcie pre lepsiu pracu
+    int row_from = aktualna_selekcia->selection[0];
+    int row_to = aktualna_selekcia->selection[2];
+
+    int col_from = aktualna_selekcia->selection[1];
+    int col_to = aktualna_selekcia->selection[3];
+
+    // dlzka zadaneho string parametra
+    int length_of_str_param = (int)strlen(string_param);
+
+    // pre danu selekciu
+    for (int riadok = row_from - 1; riadok < row_to; riadok++) {
+        for (int bunka = col_from - 1; bunka < col_to; bunka++) {
+
+            // ak nema string rovnaku dlzku ako obsah tabulky
+            if (tabulka->zoznam_riadkov[riadok].zoznam_buniek[bunka].dlzka_obsahu != length_of_str_param) {
+
+                // realokacia novej pamate
+                int *new_content;
+                new_content = realloc(tabulka->zoznam_riadkov[riadok].zoznam_buniek[bunka].obsah, sizeof(int) * length_of_str_param);
+
+                // overenie nenuloveho pointra
+                if (new_content == NULL) return false;
+
+                // ulozenie novej dlzky premennej
+                tabulka->zoznam_riadkov[riadok].zoznam_buniek[bunka].dlzka_obsahu = length_of_str_param;
+            }
+            // prekopirovanie string parametra do bunky
+            for (int i = 0; i < length_of_str_param; i++) {
+                tabulka->zoznam_riadkov[riadok].zoznam_buniek[bunka].obsah[i] = (int)string_param[i];
+            }
+        }
+    }
+    return true;
+}
+
+bool clear(Table *tabulka, Selection *aktualna_selekcia) {
+    // function that clear the contents of cells in selection
+
+    // ak je selekcia vacsia ako rozmery tabulky, doplni sa
+    refill_table(tabulka, aktualna_selekcia);
+
+    // ulozenie selekcie pre lepsiu pracu
+    int row_from = aktualna_selekcia->selection[0];
+    int row_to = aktualna_selekcia->selection[2];
+
+    int col_from = aktualna_selekcia->selection[1];
+    int col_to = aktualna_selekcia->selection[3];
+
+
+    // pre danu selekciu
+    for (int riadok = row_from - 1; riadok < row_to; riadok++) {
+        for (int bunka = col_from - 1; bunka < col_to; bunka++) {
+            tabulka->zoznam_riadkov[riadok].zoznam_buniek[bunka].dlzka_obsahu = 1;
+
+            int *new_content;
+            new_content = realloc(tabulka->zoznam_riadkov[riadok].zoznam_buniek[bunka].obsah, sizeof(int));
+            if (new_content == NULL) return false;
+            *new_content = '\0';
+            tabulka->zoznam_riadkov[riadok].zoznam_buniek[bunka].obsah = new_content;
+        }
+    }
+    return true;
+}
+
+bool swap(Table *tabulka, Selection *aktualna_selekcia, int row, int col) {
+    // function that swaps a SINGLE cell in selection with the one set byt parameters swap [R,C]
+
+    // ak je selekcia vacsia ako rozmery tabulky, doplni sa
+    refill_table(tabulka, aktualna_selekcia);
+
+    int row_from = aktualna_selekcia->selection[0];
+    int row_to = aktualna_selekcia->selection[2];
+
+    int col_from = aktualna_selekcia->selection[1];
+    int col_to = aktualna_selekcia->selection[3];
+
+    // overenie ci je v selekcii iba jedna bunka
+    if (row_from != row_to && col_from != col_to) return false;
+
+    // inicializacia pomocnych premennych na swap
+    int *tmp_cell_content;
+    int tmp_length_of_content;
+
+    tmp_cell_content = tabulka->zoznam_riadkov[row_from - 1].zoznam_buniek[col_from - 1].obsah;
+    tmp_length_of_content = tabulka->zoznam_riadkov[row_from - 1].zoznam_buniek[col_from - 1].dlzka_obsahu;
+
+    tabulka->zoznam_riadkov[row_from - 1].zoznam_buniek[col_from - 1].obsah = tabulka->zoznam_riadkov[row - 1].zoznam_buniek[col - 1].obsah;
+    tabulka->zoznam_riadkov[row_from - 1].zoznam_buniek[col_from - 1].dlzka_obsahu = tabulka->zoznam_riadkov[row - 1].zoznam_buniek[col - 1].dlzka_obsahu;
+
+    tabulka->zoznam_riadkov[row - 1].zoznam_buniek[col - 1].obsah = tmp_cell_content;
+
+    tabulka->zoznam_riadkov[row - 1].zoznam_buniek[col - 1].dlzka_obsahu = tmp_length_of_content;
+
+    return true;
+
+}
+
+bool sum(Table *tabulka, Selection *aktualna_selekcia, int row, int col) {
+    // function that save the sum of valid number cells in selection into cell provided by parameters sum [R,C]
+
+    // if the selection is bigger that the dimensions of table
+    refill_table(tabulka, aktualna_selekcia);
+
+    int row_from = aktualna_selekcia->selection[0];
+    int row_to = aktualna_selekcia->selection[2];
+
+    int col_from = aktualna_selekcia->selection[1];
+    int col_to = aktualna_selekcia->selection[3];
+
+    double total_sum = 0.0;
+    char tmp_string[1000] = "";
+
+    for (int riadok = row_from - 1; riadok < row_to; riadok++) {
+        for (int bunka = col_from - 1; bunka < col_to; bunka++) {
+
+            char endptr[1000] = "";
+
+            char *p = endptr;
+
+            double curr_number = 0.0;
+
+            int position_in_str = 0;
+
+            for (int znak = 0; znak < tabulka->zoznam_riadkov[riadok].zoznam_buniek[bunka].dlzka_obsahu; znak++) {
+                tmp_string[znak] = (char)tabulka->zoznam_riadkov[riadok].zoznam_buniek[bunka].obsah[znak];
+                position_in_str++;
+            }
+
+            tmp_string[position_in_str] = '\0';
+
+            curr_number = (double)strtold(tmp_string, &p);
+
+            if (*p == '\0') {
+                total_sum = total_sum + curr_number;
+            }
+
+        }
+    }
+
+    char buffer[MAX_ARGUMENT_LENGTH];
+
+    int output_int;
+
+    output_int = snprintf(buffer, MAX_ARGUMENT_LENGTH, "%g", total_sum);
+
+    if (output_int >= 0 && output_int < 100) {
+
+        int *new_content;
+        new_content = realloc(tabulka->zoznam_riadkov[row - 1].zoznam_buniek[col - 1].obsah, sizeof(int) * strlen(buffer));
+        if (new_content == NULL) return false;
+
+        tabulka->zoznam_riadkov[row - 1].zoznam_buniek[col - 1].obsah = new_content;
+
+
+        for (int i = 0; i < strlen(buffer); i++) {
+            tabulka->zoznam_riadkov[row - 1].zoznam_buniek[col - 1].obsah[i] = (int)buffer[i];
+        }
+
+        tabulka->zoznam_riadkov[row - 1].zoznam_buniek[col - 1].dlzka_obsahu = (int)strlen(buffer);
+
+    }
+
+
+
+
+
+
+    return true;
+}
+
+bool avg(Table *tabulka, Selection *aktualna_selekcia, int row, int col) {
+    // function that save the sum of valid number cells in selection into cell provided by parameters sum [R,C]
+
+    // if the selection is bigger that the dimensions of table
+    refill_table(tabulka, aktualna_selekcia);
+
+    int row_from = aktualna_selekcia->selection[0];
+    int row_to = aktualna_selekcia->selection[2];
+
+    int col_from = aktualna_selekcia->selection[1];
+    int col_to = aktualna_selekcia->selection[3];
+
+    double total_sum = 0.0;
+    char tmp_string[1000] = "";
+    int n_of_valid_cells = 0;
+
+    for (int riadok = row_from - 1; riadok < row_to; riadok++) {
+        for (int bunka = col_from - 1; bunka < col_to; bunka++) {
+
+            char endptr[1000] = "";
+
+            char *p = endptr;
+
+            double curr_number = 0.0;
+
+            int position_in_str = 0;
+
+            for (int znak = 0; znak < tabulka->zoznam_riadkov[riadok].zoznam_buniek[bunka].dlzka_obsahu; znak++) {
+                tmp_string[znak] = (char)tabulka->zoznam_riadkov[riadok].zoznam_buniek[bunka].obsah[znak];
+                position_in_str++;
+            }
+
+            tmp_string[position_in_str] = '\0';
+
+            curr_number = (double)strtold(tmp_string, &p);
+
+            if (*p == '\0') {
+                total_sum = total_sum + curr_number;
+                n_of_valid_cells++;
+            }
+
+        }
+    }
+
+    char buffer[MAX_ARGUMENT_LENGTH];
+
+    int output_int;
+
+    output_int = snprintf(buffer, MAX_ARGUMENT_LENGTH, "%g", total_sum/n_of_valid_cells);
+
+    if (output_int >= 0 && output_int < 100) {
+
+        int *new_content;
+        new_content = realloc(tabulka->zoznam_riadkov[row - 1].zoznam_buniek[col - 1].obsah, sizeof(int) * strlen(buffer));
+        if (new_content == NULL) return false;
+
+        tabulka->zoznam_riadkov[row - 1].zoznam_buniek[col - 1].obsah = new_content;
+
+
+        for (int i = 0; i < strlen(buffer); i++) {
+            tabulka->zoznam_riadkov[row - 1].zoznam_buniek[col - 1].obsah[i] = (int)buffer[i];
+        }
+
+        tabulka->zoznam_riadkov[row - 1].zoznam_buniek[col - 1].dlzka_obsahu = (int)strlen(buffer);
+
+    }
+
+
+
+
+
+
+    return true;
+}
+
+bool count(Table *tabulka, Selection *aktualna_selekcia, int row, int col) {
+    // function that save the sum of valid number cells in selection into cell provided by parameters sum [R,C]
+
+    // if the selection is bigger that the dimensions of table
+    refill_table(tabulka, aktualna_selekcia);
+
+    int row_from = aktualna_selekcia->selection[0];
+    int row_to = aktualna_selekcia->selection[2];
+
+    int col_from = aktualna_selekcia->selection[1];
+    int col_to = aktualna_selekcia->selection[3];
+
+    char tmp_string[1000] = "";
+    double n_of_valid_cells = 0.0;
+
+    for (int riadok = row_from - 1; riadok < row_to; riadok++) {
+        for (int bunka = col_from - 1; bunka < col_to; bunka++) {
+
+            char endptr[1000] = "";
+
+            char *p = endptr;
+
+            double curr_number = 0.0;
+
+            int position_in_str = 0;
+
+            for (int znak = 0; znak < tabulka->zoznam_riadkov[riadok].zoznam_buniek[bunka].dlzka_obsahu; znak++) {
+                tmp_string[znak] = (char)tabulka->zoznam_riadkov[riadok].zoznam_buniek[bunka].obsah[znak];
+                position_in_str++;
+            }
+
+            tmp_string[position_in_str] = '\0';
+
+            curr_number = (double)strtold(tmp_string, &p);
+
+            if (*p == '\0') {
+                n_of_valid_cells++;
+            }
+
+        }
+    }
+
+    char buffer[MAX_ARGUMENT_LENGTH];
+
+    int output_int;
+
+    output_int = snprintf(buffer, MAX_ARGUMENT_LENGTH, "%g", n_of_valid_cells);
+
+    if (output_int >= 0 && output_int < 100) {
+        printf("%d\n", (int)strlen(buffer));
+
+        if (tabulka->zoznam_riadkov[row - 1].zoznam_buniek[col - 1].dlzka_obsahu != strlen(buffer)) {
+            int *new_content;
+            new_content = realloc(tabulka->zoznam_riadkov[row - 1].zoznam_buniek[col - 1].obsah, sizeof(int) * strlen(buffer));
+            if (new_content == NULL) return false;
+
+            tabulka->zoznam_riadkov[row - 1].zoznam_buniek[col - 1].obsah = new_content;
+        }
+
+        for (int i = 0; i < strlen(buffer); i++) {
+            tabulka->zoznam_riadkov[row - 1].zoznam_buniek[col - 1].obsah[i] = (int)buffer[i];
+        }
+
+        tabulka->zoznam_riadkov[row - 1].zoznam_buniek[col - 1].dlzka_obsahu = (int)strlen(buffer);
+
+    }
+    return true;
+}
