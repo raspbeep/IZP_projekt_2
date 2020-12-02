@@ -1,6 +1,4 @@
-3:3:3:C
-B:LMAO:3:C
-9:9:9:C
-B:LMAO:15:C
-3:3:3:C
-B:LMAO:15:C
+Jmeno Prijmeni Plat
+Bill Gates 15000000
+Franta Odvedle 15000000
+Pepik Ajtak 15000000

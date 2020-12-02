@@ -1,3 +1,11 @@
+/**
+ * @name IZP Projekt 2 - Praca s datovymi strukturami
+ * @author Pavel Kratochvíl
+ * login: xkrato61
+ * version: V1.0
+ */
+
+
 #include <stdio.h>
 #include <stdbool.h>
 #include <string.h>
@@ -10,19 +18,17 @@
 // TODO dorobit file input ako posledny argument zo vstupu
 // TODO mallocovat agrument string
 
-typedef enum {IROW, AROW, DROW, ICOL, ACOL, DCOL, SET, CLEAR, SWAP, SUM, AVG, COUNTER, LEN, DEF, USER, } Commands;
-
 typedef enum {SELECTION, ARGUMENT} ParseMode;
 
 // struct premennej, vie v sebe ulozit cislo alebo string
-typedef struct premenna {
-    int typ_premennej;      // -1 = neurcena, 0 = cislo, 1 = float, 2 = string
-    int cislo;              // miesto na ulozenie cisla
+typedef struct variable {
+    int typ_premennej;      // -1 = neurcena, 0 = float, 1 = string
+    int selection[4];       // miesto na docasne ulozenie selekcie
     double cislo_f;         // miesto na ulozenie floatu
     char *string;           // miesto na ulozenie stringu
 } Variable;
 
-typedef struct vyber_buniek {
+typedef struct selection_of_cells {
     int selection[4];       // vyber na konkretne okno buniek
     int selection_type;     // 0 = selekcia s dvomi parametrami [1,1], 1 = selekcia rozsahu [1,1,1,2]
     bool max;               // indikuje ci je zvoleny aj max parameter
@@ -33,31 +39,17 @@ typedef struct vyber_buniek {
     double selected_value;     // hodnota vybrana blizsou selekciou s [max], [min]
 } Selection;
 
-typedef struct prikaz {
-    Selection vyber_buniek;
-    Commands prikaz;        // konkretny prikaz z enumu
-    char *set_str;          // strin parameter na argument set STR
-    int param1;             // parameter 1
-    int param2;             // parameter 2
-
-} Arg;
-
-typedef struct prikazy {
-    int pocet;
-    Arg *list_of_arguments;
-} Arguments;
-
-typedef struct bunka {
+typedef struct cell {
     int dlzka_obsahu;
     int *obsah;
 } Cell;
 
-typedef struct riadok {
+typedef struct row {
     int pocet_buniek;
     Cell *zoznam_buniek;
 } Row;
 
-typedef struct tabulka {
+typedef struct table {
     int pocet_riadkov;
     Row *zoznam_riadkov;
 } Table;
@@ -72,13 +64,13 @@ void dealloc_table (Table *tabulka);
 void level_table(Table *tabulka);
 void dealloc_variables(Variable *list);
 Variable *init_list_of_variables();
-Arguments *parse_arguments (const char *string_of_all_params, Table *tabulka);
-int verified_int (const char string[]);
+bool parse_arguments (const char *string_of_all_params, Table *tabulka, Variable *list_of_variables);
 void init_selection(Selection *aktualna_selekcia);
 void zero_selection(Selection *aktualna_selekcia);
 bool refill_table (Table *tabulka, Selection *aktualna_selekcia);
 bool set_selection (Table *tabulka, Selection *aktualna_selekcia, int *position, int *position_of_next_bracket, const char *string);
 bool extract_params(const char *string, int *position, int pos_of_first_n, int *param1, int *param2);
+bool swap_cells (Table *tabulka, int row1, int col1, int row2, int col2);
 
 // FUNKCIE NA UPRAVU STRUKTURY TABULKY
 bool irow(Table *tabulka, Selection *aktualna_selekcia);
@@ -88,6 +80,7 @@ bool icol(Table *tabulka, Selection *aktualna_selekcia);
 bool acol(Table *tabulka, Selection *aktualna_selekcia);
 bool dcol(Table *tabulka, Selection *aktualna_selekcia);
 
+// FUNKCIE NA UPRAVU OBSAHU TABULKY
 bool set_str (Table *tabulka, Selection *aktualna_selekcia, char string_param[1000]);
 bool clear(Table *tabulka, Selection *aktualna_selekcia);
 bool swap(Table *tabulka, Selection *aktualna_selekcia, int row, int col);
@@ -95,12 +88,27 @@ bool sum(Table *tabulka, Selection *aktualna_selekcia, int row, int col);
 bool avg(Table *tabulka, Selection *aktualna_selekcia, int row, int col);
 bool count(Table *tabulka, Selection *aktualna_selekcia, int row, int col);
 
-
+// FUNKCIE NA PREMENNE
+bool def_var (Table *tabulka, Selection *aktualna_selekcia, Variable *list_of_variables, int *position, const char *string);
+bool use_var(Table *tabulka, Selection *aktualna_selekcia, Variable *list_of_variables, int *position, const char *string);
+bool inc_var(Selection *aktualna_selekcia, Variable *list_of_variables, int *position, const char *string);
+bool set_var(Selection *aktualna_selekcia, Variable *list_of_variables, int *position);
+bool set_var_use(Selection *aktualna_selekcia, Variable *list_of_variables, int *position);
 
 int main(int argc, char *argv[]) {
 
-    // neboli zadane ziadne argumenty
-    if (argc == 1) return 2;
+    /*
+    // TODO NA KONCI ODKOMENTOVAT
+
+    if (argc != 5 && argc != 3) return -1;
+
+    if (argc == 3) {
+        freopen(argv[2], "r", stdin);
+    } else {
+        freopen(argv[4], "r", stdin);
+    }
+
+    */
 
     // jednoznakovy delim
     char delim;
@@ -126,7 +134,7 @@ int main(int argc, char *argv[]) {
     // inicializacia listu premennych, naplnia sa nulami, "", a -1
     list_of_variables = init_list_of_variables();
 
-    Arguments *list_of_arguments;
+    //Arguments *list_of_arguments;
 
     int exit_code = 0;
 
@@ -143,14 +151,10 @@ int main(int argc, char *argv[]) {
                 // dorovnanie tabulky aby bol vsade rovnaky pocet stlpcov
                 level_table(tabulka);
 
+                if (parse_arguments(string_of_all_params, tabulka, list_of_variables) == false) exit_code = -1;
+
                 // basic vytlacenie tabulky
-
-
-                if (parse_arguments(string_of_all_params, tabulka) == NULL) exit_code = -1;
-
                 print_table(tabulka, delim);
-
-                //save_args(argv);
 
                 run_mode = EXIT;
                 break;
@@ -159,7 +163,6 @@ int main(int argc, char *argv[]) {
                 break;
         }
     }
-
     // DEALLOC
 
     // string input stringu s argumentmi
@@ -241,6 +244,9 @@ Table *load_table_from_file(char *delim, char *delim_string, bool multi_characte
 
                 // inkrementacia poctu buniek v aktualnom riadku
                 aktualny_pocet_buniek++;
+
+                //Cell *init_ptr = NULL;
+                //tabulka->zoznam_riadkov[aktualny_pocet_riadkov-1].zoznam_buniek = init_ptr;
 
                 // zvacsenie zoznamu aktualnych buniek
                 Cell *newptr;
@@ -444,7 +450,7 @@ Table *load_table_from_file(char *delim, char *delim_string, bool multi_characte
 
                 // alokacia pamate na bunku v novom riadku
                 Cell *newcell;
-                newcell = realloc(tabulka->zoznam_riadkov[aktualny_pocet_riadkov-1].zoznam_buniek, sizeof(Cell) * aktualny_pocet_buniek);
+                newcell = malloc(sizeof(Cell) * aktualny_pocet_buniek);
 
                 // kontrola nuloveho pointra
                 if (newcell == NULL) return NULL;
@@ -512,6 +518,7 @@ void zero_selection(Selection *aktualna_selekcia) {
 char *save_delim_and_args(int argc, char **argv, char *delim, char delim_string[MAX_DELIM_SIZE], bool *multi_character_delim) {
     // zisti ci bol zadany delim, ulozi ho, prekopiruje string argumentov string_of_all_params
     if (!strcmp(argv[1], "-d")) {
+
         if (strlen(argv[2]) > 1) {
             *multi_character_delim = true;
             strcpy(delim_string, argv[2]);
@@ -528,11 +535,11 @@ char *save_delim_and_args(int argc, char **argv, char *delim, char delim_string[
 
     } else {
         *delim = DEF_DELIM;
-        strcpy(delim_string, argv[1]);
+        *multi_character_delim = false;
 
-        char *string_of_all_params = malloc(sizeof(char) * (strlen(argv[3]) + 1));
-        strcpy(string_of_all_params, argv[3]);
-        string_of_all_params[strlen(argv[3])] = '\0';
+        char *string_of_all_params = malloc(sizeof(char) * (strlen(argv[1]) + 1));
+        strcpy(string_of_all_params, argv[1]);
+        string_of_all_params[strlen(argv[1])] = '\0';
         return string_of_all_params;
 
     }
@@ -594,22 +601,18 @@ void level_table (Table *tabulka) {
 
 Variable *init_list_of_variables (){
     Variable *list;
-    list = malloc(sizeof(Variable) * 10);
+    list = malloc(sizeof(Variable) * 11);
 
-    for (int i = 0; i < 10; i++) {
+    for (int i = 0; i < 11; i++) {
+        for (int pos = 0; pos < 4; pos++) list[i].selection[pos] = 0;
         list[i].typ_premennej = -1;
-        list[i].cislo = 0;
         list[i].cislo_f = 0.0;
-        list[i].string = malloc(sizeof(char));
     }
 
     return list;
 }
 
 void dealloc_variables (Variable *list) {
-    for (int i = 0; i < 10; i++) {
-        free(list[i].string);
-    }
     free(list);
 }
 
@@ -854,13 +857,13 @@ bool set_selection (Table *tabulka, Selection *aktualna_selekcia, int *position,
             }
         } else
 
-            cele_cislo = (int)strtol(tmp_string, NULL, 10);
+
 
         if (pocet_ciarok == 1) {
 
             // ak som na prvom cisle z dvoch
             if (i == 0) {
-
+                cele_cislo = (int)strtol(tmp_string, NULL, 10);
                 // ulozenie prveho cisla
                 aktualna_selekcia->selection[0] = cele_cislo;
 
@@ -872,6 +875,7 @@ bool set_selection (Table *tabulka, Selection *aktualna_selekcia, int *position,
 
                 // som na druhom cisle z dvoch
             } else {
+                cele_cislo = (int)strtol(tmp_string, NULL, 10);
                 // nastavenie druheho cisla
                 aktualna_selekcia->selection[1] = cele_cislo;
 
@@ -881,6 +885,7 @@ bool set_selection (Table *tabulka, Selection *aktualna_selekcia, int *position,
 
             // ak mam 3 ciarky, teda 4 parametre
         } else {
+            cele_cislo = (int)strtol(tmp_string, NULL, 10);
             if (pomlcka) {
                 if (i == 2) {
                     aktualna_selekcia->selection[i] = tabulka->pocet_riadkov;
@@ -948,9 +953,6 @@ bool extract_params(const char *string, int *position, int pos_of_first_n, int *
 
     tmp_string[last_index] = '\0';
 
-    // vytvorenie miesta na string ak by v bunke nebolo iba cislo napr. '3.14abc'
-    char endptr2[MAX_ARGUMENT_LENGTH] = "";
-
     // pointer na prvy znak v endptr kvoli funkcii strtod
     char *p2_ptr = endptr1;
 
@@ -966,7 +968,7 @@ bool extract_params(const char *string, int *position, int pos_of_first_n, int *
     return true;
 }
 
-Arguments *parse_arguments(const char *string, Table *tabulka) {
+bool parse_arguments(const char *string, Table *tabulka, Variable *list_of_variables) {
 
     // vytvorenie pointra na aktualnu selekciu
     Selection *aktualna_selekcia;
@@ -989,7 +991,7 @@ Arguments *parse_arguments(const char *string, Table *tabulka) {
         // tak to znamena ze po najblizsiu ']' budem mat 2-4 parametre
         if (string[position] == '[' && string[position + 1] != 'm' && string[position + 1] != 'f') {
 
-            if (!set_selection(tabulka, aktualna_selekcia, &position, &position_of_next_bracket, string)) return NULL;
+            if (!set_selection(tabulka, aktualna_selekcia, &position, &position_of_next_bracket, string)) return false;
         }
 
         // ak narazim na [max] alebo [min]
@@ -1073,15 +1075,19 @@ Arguments *parse_arguments(const char *string, Table *tabulka) {
                             if (found_max) {
 
                                 aktualna_selekcia->max = true;
-                                aktualna_selekcia->selection[0] = row;
-                                aktualna_selekcia->selection[2] = row;
-                                aktualna_selekcia->selection[1] = col;
-                                aktualna_selekcia->selection[3] = col;
+
+                                // + 1 kvoli indexovaniu
+                                aktualna_selekcia->selection[0] = row + 1;
+                                aktualna_selekcia->selection[2] = row + 1;
+                                aktualna_selekcia->selection[1] = col + 1;
+                                aktualna_selekcia->selection[3] = col + 1;
                                 aktualna_selekcia->selected_value = curr_number;
+
                             }
 
                         }
                     }
+
                 }
 
                 if (string[position + 2] == 'i') {
@@ -1138,6 +1144,8 @@ Arguments *parse_arguments(const char *string, Table *tabulka) {
                         }
                     }
                 }
+            } else {
+                position++;
             }
         }
 
@@ -1245,47 +1253,45 @@ Arguments *parse_arguments(const char *string, Table *tabulka) {
 
         }
 
-        // TODO dorobit [_] pre obnovenie vyberu z docasnej premennej
-
         // irow
         else if (string[position] == 'i' && string[position + 1] == 'r') {
             if (verify_command(string, &position, "irow")) {
-                if(!irow(tabulka, aktualna_selekcia)) return NULL;
+                if(!irow(tabulka, aktualna_selekcia)) return false;
             }
         }
 
         // arow
         else if (string[position] == 'a' && string[position + 1] == 'r') {
             if (verify_command(string, &position, "arow")) {
-                if(!arow(tabulka, aktualna_selekcia)) return NULL;
+                if(!arow(tabulka, aktualna_selekcia)) return false;
             }
         }
 
         // drow
         else if (string[position] == 'd' && string[position + 1] == 'r') {
             if (verify_command(string, &position, "drow")) {
-                if(!drow(tabulka, aktualna_selekcia)) return NULL;
+                if(!drow(tabulka, aktualna_selekcia)) return false;
             }
         }
 
         // icol
         else if (string[position] == 'i' && string[position + 1] == 'c') {
             if (verify_command(string, &position, "icol")) {
-                if(!icol(tabulka, aktualna_selekcia)) return NULL;
+                if(!icol(tabulka, aktualna_selekcia)) return false;
             }
         }
 
         // acol
         else if (string[position] == 'a' && string[position + 1] == 'c') {
             if (verify_command(string, &position, "acol")) {
-                if(!acol(tabulka, aktualna_selekcia)) return NULL;
+                if(!acol(tabulka, aktualna_selekcia)) return false;
             }
         }
 
         // dcol
         else if (string[position] == 'd' && string[position + 1] == 'c') {
             if (verify_command(string, &position, "dcol")) {
-                if(!dcol(tabulka, aktualna_selekcia)) return NULL;
+                if(!dcol(tabulka, aktualna_selekcia)) return false;
             }
         }
 
@@ -1325,7 +1331,7 @@ Arguments *parse_arguments(const char *string, Table *tabulka) {
         else if (string[position] == 'c' && string[position + 1] == 'l' && string[position + 2] == 'e' &&
                 string[position + 3] == 'a' && string[position + 4] == 'r') {
 
-            if (!clear(tabulka, aktualna_selekcia)) return NULL;
+            if (!clear(tabulka, aktualna_selekcia)) return false;
 
             position = position + 5;
         }
@@ -1335,34 +1341,54 @@ Arguments *parse_arguments(const char *string, Table *tabulka) {
                 string[position + 3] == 'p') {
             int param1, param2;
 
-            if (!extract_params(string, &position, 6, &param1, &param2)) return NULL;
-            if (!swap(tabulka, aktualna_selekcia, param1, param2)) return NULL;
+            if (!extract_params(string, &position, 6, &param1, &param2)) return false;
+            if (!swap(tabulka, aktualna_selekcia, param1, param2)) return false;
         }
 
         else if (string[position] == 's' && string[position + 1] == 'u' && string[position + 2] == 'm') {
             int param1, param2;
 
-            if (!extract_params(string, &position, 5, &param1, &param2)) return NULL;
-            if (!sum(tabulka, aktualna_selekcia, param1, param2)) return NULL;
+            if (!extract_params(string, &position, 5, &param1, &param2)) return false;
+            if (!sum(tabulka, aktualna_selekcia, param1, param2)) return false;
 
         }
 
         else if (string[position] == 'a' && string[position + 1] == 'v' && string[position + 2] == 'g') {
             int param1, param2;
 
-            if (!extract_params(string, &position, 5, &param1, &param2)) return NULL;
-            if (!avg(tabulka, aktualna_selekcia, param1, param2)) return NULL;
+            if (!extract_params(string, &position, 5, &param1, &param2)) return false;
+            if (!avg(tabulka, aktualna_selekcia, param1, param2)) return false;
         }
 
         else if (string[position] == 'c' && string[position + 1] == 'o' && string[position + 2] == 'u' &&
         string[position + 3] == 'n' && string[position + 4] == 't') {
             int param1, param2;
 
-            if (!extract_params(string, &position, 7, &param1, &param2)) return NULL;
+            if (!extract_params(string, &position, 7, &param1, &param2)) return false;
 
-            if (!count(tabulka, aktualna_selekcia, param1, param2)) return NULL;
+            if (!count(tabulka, aktualna_selekcia, param1, param2)) return false;
         }
 
+        else if (string[position] == 'd' && string[position + 1] == 'e' && string[position + 2] == 'f') {
+            if (!def_var(tabulka, aktualna_selekcia, list_of_variables, &position, string)) return false;
+        }
+
+        else if (string[position] == 'u' && string[position + 1] == 's' && string[position + 2] == 'e') {
+            if (!use_var(tabulka, aktualna_selekcia, list_of_variables, &position, string)) return false;
+        }
+
+        else if (string[position] == 'i' && string[position + 1] == 'n' && string[position + 2] == 'c') {
+            if (!inc_var(aktualna_selekcia, list_of_variables, &position, string)) return false;
+        }
+
+        else if (string[position] == '[' && string[position + 1] == 's' && string[position + 2] == 'e' && string[position + 3] == 't'
+                && string[position + 4] == 't' && string[position + 5] == ']') {
+            if (!set_var(aktualna_selekcia, list_of_variables, &position)) return false;
+        }
+
+        else if (string[position] == '[' && string[position + 1] == '_' && string[position + 2] == ']') {
+            if (!set_var_use(aktualna_selekcia, list_of_variables, &position)) return false;
+        }
 
         else {
             position++;
@@ -1370,6 +1396,7 @@ Arguments *parse_arguments(const char *string, Table *tabulka) {
     }
     dealloc_selection(aktualna_selekcia);
     free(aktualna_selekcia);
+    return true;
 
 }
 
@@ -1665,6 +1692,9 @@ bool dcol(Table *tabulka, Selection *aktualna_selekcia) {
         // zmensenie pamate na novy pocet buniek
         Cell *new_row = realloc(tabulka->zoznam_riadkov[riadok].zoznam_buniek, sizeof(Cell) * new_n_of_cols);
 
+        // might delete later
+        tabulka->zoznam_riadkov[riadok].zoznam_buniek = new_row;
+
     }
 
     //true, vsetko sa podarilo
@@ -1700,6 +1730,8 @@ bool set_str (Table *tabulka, Selection *aktualna_selekcia, char string_param[10
 
                 // overenie nenuloveho pointra
                 if (new_content == NULL) return false;
+
+                tabulka->zoznam_riadkov[riadok].zoznam_buniek[bunka].obsah = new_content;
 
                 // ulozenie novej dlzky premennej
                 tabulka->zoznam_riadkov[riadok].zoznam_buniek[bunka].dlzka_obsahu = length_of_str_param;
@@ -1754,25 +1786,14 @@ bool swap(Table *tabulka, Selection *aktualna_selekcia, int row, int col) {
     int col_from = aktualna_selekcia->selection[1];
     int col_to = aktualna_selekcia->selection[3];
 
-    // overenie ci je v selekcii iba jedna bunka
-    if (row_from != row_to && col_from != col_to) return false;
 
-    // inicializacia pomocnych premennych na swap
-    int *tmp_cell_content;
-    int tmp_length_of_content;
-
-    tmp_cell_content = tabulka->zoznam_riadkov[row_from - 1].zoznam_buniek[col_from - 1].obsah;
-    tmp_length_of_content = tabulka->zoznam_riadkov[row_from - 1].zoznam_buniek[col_from - 1].dlzka_obsahu;
-
-    tabulka->zoznam_riadkov[row_from - 1].zoznam_buniek[col_from - 1].obsah = tabulka->zoznam_riadkov[row - 1].zoznam_buniek[col - 1].obsah;
-    tabulka->zoznam_riadkov[row_from - 1].zoznam_buniek[col_from - 1].dlzka_obsahu = tabulka->zoznam_riadkov[row - 1].zoznam_buniek[col - 1].dlzka_obsahu;
-
-    tabulka->zoznam_riadkov[row - 1].zoznam_buniek[col - 1].obsah = tmp_cell_content;
-
-    tabulka->zoznam_riadkov[row - 1].zoznam_buniek[col - 1].dlzka_obsahu = tmp_length_of_content;
+    for (int riadok = row_from - 1; riadok < row_to; riadok++) {
+        for (int bunka = col_from - 1; bunka < col_to; bunka++) {
+            swap_cells(tabulka, riadok, bunka, row-1, col-1);
+        }
+    }
 
     return true;
-
 }
 
 bool sum(Table *tabulka, Selection *aktualna_selekcia, int row, int col) {
@@ -1823,7 +1844,7 @@ bool sum(Table *tabulka, Selection *aktualna_selekcia, int row, int col) {
 
     output_int = snprintf(buffer, MAX_ARGUMENT_LENGTH, "%g", total_sum);
 
-    if (output_int >= 0 && output_int < 100) {
+    if (output_int >= 0 && output_int < MAX_ARGUMENT_LENGTH) {
 
         int *new_content;
         new_content = realloc(tabulka->zoznam_riadkov[row - 1].zoznam_buniek[col - 1].obsah, sizeof(int) * strlen(buffer));
@@ -1832,19 +1853,13 @@ bool sum(Table *tabulka, Selection *aktualna_selekcia, int row, int col) {
         tabulka->zoznam_riadkov[row - 1].zoznam_buniek[col - 1].obsah = new_content;
 
 
-        for (int i = 0; i < strlen(buffer); i++) {
+        for (int i = 0, length = (int)strlen(buffer); i < length; i++) {
             tabulka->zoznam_riadkov[row - 1].zoznam_buniek[col - 1].obsah[i] = (int)buffer[i];
         }
 
         tabulka->zoznam_riadkov[row - 1].zoznam_buniek[col - 1].dlzka_obsahu = (int)strlen(buffer);
 
     }
-
-
-
-
-
-
     return true;
 }
 
@@ -1907,19 +1922,13 @@ bool avg(Table *tabulka, Selection *aktualna_selekcia, int row, int col) {
         tabulka->zoznam_riadkov[row - 1].zoznam_buniek[col - 1].obsah = new_content;
 
 
-        for (int i = 0; i < strlen(buffer); i++) {
+        for (int i = 0, length = (int)strlen(buffer); i < length; i++) {
             tabulka->zoznam_riadkov[row - 1].zoznam_buniek[col - 1].obsah[i] = (int)buffer[i];
         }
 
         tabulka->zoznam_riadkov[row - 1].zoznam_buniek[col - 1].dlzka_obsahu = (int)strlen(buffer);
 
     }
-
-
-
-
-
-
     return true;
 }
 
@@ -1935,59 +1944,244 @@ bool count(Table *tabulka, Selection *aktualna_selekcia, int row, int col) {
     int col_from = aktualna_selekcia->selection[1];
     int col_to = aktualna_selekcia->selection[3];
 
-    char tmp_string[1000] = "";
-    double n_of_valid_cells = 0.0;
+    int n_of_valid_cells = 0;
 
     for (int riadok = row_from - 1; riadok < row_to; riadok++) {
         for (int bunka = col_from - 1; bunka < col_to; bunka++) {
 
-            char endptr[1000] = "";
-
-            char *p = endptr;
-
-            double curr_number = 0.0;
-
-            int position_in_str = 0;
-
-            for (int znak = 0; znak < tabulka->zoznam_riadkov[riadok].zoznam_buniek[bunka].dlzka_obsahu; znak++) {
-                tmp_string[znak] = (char)tabulka->zoznam_riadkov[riadok].zoznam_buniek[bunka].obsah[znak];
-                position_in_str++;
-            }
-
-            tmp_string[position_in_str] = '\0';
-
-            curr_number = (double)strtold(tmp_string, &p);
-
-            if (*p == '\0') {
+            if (tabulka->zoznam_riadkov[riadok].zoznam_buniek[bunka].dlzka_obsahu == 1) {
+                if (tabulka->zoznam_riadkov[riadok].zoznam_buniek[bunka].obsah[0] != '\0') {
+                    n_of_valid_cells++;
+                }
+            } else {
                 n_of_valid_cells++;
             }
-
         }
     }
 
-    char buffer[MAX_ARGUMENT_LENGTH];
+    char buffer[MAX_ARGUMENT_LENGTH] = "";
 
-    int output_int;
+    int new_length_of_content = snprintf(buffer, MAX_ARGUMENT_LENGTH, "%d", n_of_valid_cells);
 
-    output_int = snprintf(buffer, MAX_ARGUMENT_LENGTH, "%g", n_of_valid_cells);
+    int *new_content;
 
-    if (output_int >= 0 && output_int < 100) {
-        printf("%d\n", (int)strlen(buffer));
+    new_content = malloc(sizeof(int) * new_length_of_content);
+    if (new_content == NULL) return false;
 
-        if (tabulka->zoznam_riadkov[row - 1].zoznam_buniek[col - 1].dlzka_obsahu != strlen(buffer)) {
-            int *new_content;
-            new_content = realloc(tabulka->zoznam_riadkov[row - 1].zoznam_buniek[col - 1].obsah, sizeof(int) * strlen(buffer));
-            if (new_content == NULL) return false;
+    free(tabulka->zoznam_riadkov[row - 1].zoznam_buniek[col - 1].obsah);
+    tabulka->zoznam_riadkov[row - 1].zoznam_buniek[col - 1].obsah = new_content;
+    tabulka->zoznam_riadkov[row - 1].zoznam_buniek[col - 1].dlzka_obsahu = new_length_of_content;
 
-            tabulka->zoznam_riadkov[row - 1].zoznam_buniek[col - 1].obsah = new_content;
+    for (int znak = 0; znak < new_length_of_content; znak++) {
+        tabulka->zoznam_riadkov[row - 1].zoznam_buniek[col - 1].obsah[znak] = (int)buffer[znak];
+    }
+
+
+
+    return true;
+}
+
+bool def_var(Table *tabulka, Selection *aktualna_selekcia, Variable *list_of_variables, int *position, const char *string) {
+    // funkcia ktora ulozi hodnotu aktualnej jednej bunky v selekcii a ulozi ju do premennej _X
+
+    // ak je selekcia vacsia ako rozmery tabulky, doplni sa
+    refill_table(tabulka, aktualna_selekcia);
+
+    // kontrola ci mam v selekcii iba jednu bunku
+    if (aktualna_selekcia->selection[0] != aktualna_selekcia->selection[2] || aktualna_selekcia->selection[1] != aktualna_selekcia->selection[3]) return false;
+
+    // premenna ktora bude na indexe za koncom cisla
+    int position_of_number = *position + 5;
+
+    char cislo[2] = "";
+
+    cislo[0] = string[position_of_number];
+    cislo[1] = '\0';
+    char *p;
+
+    long int ret;
+    ret = strtol(cislo, &p, 10);
+
+    if (p == NULL) return false;
+    if (ret < -1 || ret > 9) return false;
+
+    char tmp_string[100] = "";
+
+    double curr_number = 0.0;
+
+    int length_of_content = tabulka->zoznam_riadkov[aktualna_selekcia->selection[0] - 1].zoznam_buniek[aktualna_selekcia->selection[1] - 1].dlzka_obsahu;
+
+    for (int znak = 0; znak < length_of_content;znak++) {
+        tmp_string[znak] = (char)tabulka->zoznam_riadkov[aktualna_selekcia->selection[0] - 1].zoznam_buniek[aktualna_selekcia->selection[1] - 1].obsah[znak];
+    }
+
+    curr_number = (double)strtold(tmp_string, &p);
+
+    // obsah je cislo
+    if (*p == '\0') {
+
+        // ulozenie cisla do premennej
+        list_of_variables[ret - 1].cislo_f = curr_number;
+
+        // nastavenie typu premennej na cislo
+        list_of_variables[ret - 1].typ_premennej = 0;
+    } else {
+
+        // obsah je string
+        char *new_string = malloc(sizeof(char) * (length_of_content + 1));
+        if (new_string == NULL) return false;
+
+        // prekopirovanie obsahu bunky v selekcii do variable
+        for (int znak = 0; znak < length_of_content;znak++) {
+            new_string[znak] = (char)tabulka->zoznam_riadkov[aktualna_selekcia->selection[0] - 1].zoznam_buniek[aktualna_selekcia->selection[1] - 1].obsah[znak];
         }
 
-        for (int i = 0; i < strlen(buffer); i++) {
-            tabulka->zoznam_riadkov[row - 1].zoznam_buniek[col - 1].obsah[i] = (int)buffer[i];
-        }
+        new_string[length_of_content] = '\0';
 
-        tabulka->zoznam_riadkov[row - 1].zoznam_buniek[col - 1].dlzka_obsahu = (int)strlen(buffer);
+        // ulozenie stringu do premennej
+        list_of_variables[ret - 1].string = new_string;
+
+        // nastavenie typu premennej na string
+        list_of_variables[ret - 1].typ_premennej = 1;
 
     }
+    *position = *position + 6;
+    return true;
+}
+
+bool use_var(Table *tabulka, Selection *aktualna_selekcia, Variable *list_of_variables, int *position, const char *string) {
+    // funkcia ktora prepise hodnotu jednej bunky v aktualnej
+
+    // ak je selekcia vacsia ako rozmery tabulky, doplni sa
+    refill_table(tabulka, aktualna_selekcia);
+
+    int row_from = aktualna_selekcia->selection[0];
+    int row_to = aktualna_selekcia->selection[2];
+
+    int col_from = aktualna_selekcia->selection[1];
+    int col_to = aktualna_selekcia->selection[3];
+
+    // premenna ktora bude na indexe za koncom cisla
+    int position_of_number = *position + 5;
+
+    char cislo[2] = "";
+
+    cislo[0] = string[position_of_number];
+    cislo[1] = '\0';
+    char *p;
+
+    long int ret;
+    ret = strtol(cislo, &p, 10);
+
+    if (p == NULL) return false;
+    if (ret < -1 || ret > 9) return false;
+
+    char new_cell_content[MAX_ARGUMENT_LENGTH] = "";
+    int dlzka_obsahu = 0;
+
+    if (list_of_variables[ret - 1].typ_premennej == 0) {
+        dlzka_obsahu = snprintf(new_cell_content, MAX_ARGUMENT_LENGTH, "%g", (float)list_of_variables[ret - 1].cislo_f);
+    } else {
+        dlzka_obsahu = (int)strlen(list_of_variables[ret - 1].string);
+        strcpy(new_cell_content, list_of_variables[ret - 1].string);
+    }
+    if (dlzka_obsahu >= 0 && dlzka_obsahu < MAX_ARGUMENT_LENGTH) {
+        for (int riadok = row_from - 1; riadok < row_to; riadok++) {
+            for (int bunka = col_from - 1; bunka < col_to; bunka++) {
+
+                // ak je dlzka obsahu bunky ina ako dlzka noveho obsahu, reallokujem na potrebnu dlzku
+                if (tabulka->zoznam_riadkov[riadok].zoznam_buniek[bunka].dlzka_obsahu != dlzka_obsahu - 1) {
+
+                    int *new_content = realloc(tabulka->zoznam_riadkov[riadok].zoznam_buniek[bunka].obsah, sizeof(int) * (dlzka_obsahu));
+
+                    if (new_content == NULL) return false;
+
+                    tabulka->zoznam_riadkov[riadok].zoznam_buniek[bunka].obsah = new_content;
+                }
+
+                for (int znak = 0; znak < dlzka_obsahu; znak++) {
+                    tabulka->zoznam_riadkov[riadok].zoznam_buniek[bunka].obsah[znak] = (int)new_cell_content[znak];
+                }
+                tabulka->zoznam_riadkov[riadok].zoznam_buniek[bunka].dlzka_obsahu = dlzka_obsahu;
+
+            }
+        }
+
+    }
+    *position = *position + 6;
+    return true;
+}
+
+bool inc_var(Selection *aktualna_selekcia, Variable *list_of_variables, int *position, const char *string) {
+    // funkcia ktora inkrementuje hodnotu v premennej o 1, ak tam nie je ulozene cislo,
+
+    // premenna ktora bude na indexe za koncom cisla
+    int position_of_number = *position + 5;
+
+    char cislo[2] = "";
+
+    cislo[0] = string[position_of_number];
+    cislo[1] = '\0';
+    char *p;
+
+    long int ret;
+    ret = strtol(cislo, &p, 10);
+
+    if (p == NULL) return false;
+    if (ret < -1 || ret > 9) return false;
+
+    // ak je ulozena premenna cislo
+    if (list_of_variables[ret - 1].typ_premennej == 0) {
+        list_of_variables[ret - 1].cislo_f = list_of_variables[ret - 1].cislo_f + 1;
+    } else if (list_of_variables[ret - 1].typ_premennej == 1){
+        free(list_of_variables[ret - 1].string);
+        list_of_variables[ret - 1].typ_premennej = 0;
+        list_of_variables[ret - 1].cislo_f = 1;
+    }else {
+        list_of_variables[ret - 1].typ_premennej = 0;
+        list_of_variables[ret - 1].cislo_f = 1;
+    }
+
+    *position = *position + 6;
+    return true;
+}
+
+bool set_var(Selection *aktualna_selekcia, Variable *list_of_variables, int *position) {
+    // funkcia ktora
+
+    // posledna, 10ta, je urcena iba na ulozenie selekcie
+    for (int i = 0; i < 3; i++) {
+        list_of_variables[10].selection[i] = aktualna_selekcia->selection[i];
+    }
+
+    *position = *position + 5;
+    return true;
+}
+
+bool set_var_use(Selection *aktualna_selekcia, Variable *list_of_variables, int *position) {
+    // funkcia ktora ulozi zvolenu selekciu do premennej
+
+    // posledna, 10ta, je urcena iba na ulozenie selekcie
+    for (int i = 0; i < 3; i++) {
+        aktualna_selekcia->selection[i] = list_of_variables[10].selection[i];
+    }
+
+    *position = *position + 5;
+    return true;
+}
+
+bool swap_cells (Table *tabulka, int row1, int col1, int row2, int col2) {
+    // helper function for swapping of two cells
+
+    // inicializacia pomocnych premennych na swap
+    int *tmp_cell_content = tabulka->zoznam_riadkov[row1].zoznam_buniek[col1].obsah;
+    int tmp_length_of_content = tabulka->zoznam_riadkov[row1].zoznam_buniek[col1].dlzka_obsahu;
+
+    tabulka->zoznam_riadkov[row1].zoznam_buniek[col1].obsah = tabulka->zoznam_riadkov[row2].zoznam_buniek[col2].obsah;
+    tabulka->zoznam_riadkov[row1].zoznam_buniek[col1].dlzka_obsahu = tabulka->zoznam_riadkov[row2].zoznam_buniek[col2].dlzka_obsahu;
+
+    tabulka->zoznam_riadkov[row2].zoznam_buniek[col2].obsah = tmp_cell_content;
+    tabulka->zoznam_riadkov[row2].zoznam_buniek[col2].dlzka_obsahu = tmp_length_of_content;
+
     return true;
 }

@@ -1,4 +1,4 @@
-AMAA:5:C
-B:LMAO:15
-CMAA:5:C
-D:LMAO:15
+Jmeno:Prijmeni:Plat
+Bill:Gates:15000000
+Franta:Odvedle:15
+Pepik:Ajtak:42
